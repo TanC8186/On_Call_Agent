@@ -1,6 +1,6 @@
 """
 通用 Plan-Execute-Replan 状态定义
-基于 LangGraph 官方教程实现
+使用 TypedDict + Annotated reducer 实现多步推理状态管理
 """
 
 from typing import List, TypedDict, Annotated

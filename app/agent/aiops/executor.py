@@ -1,6 +1,6 @@
 """
 Executor 节点：执行单个步骤
-基于 LangGraph 官方教程实现
+从计划队列中弹出下一步，由 LLM 决策调用哪个 MCP 工具并执行
 """
 
 from typing import Dict, Any

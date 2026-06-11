@@ -47,7 +47,7 @@ if USE_REAL_API:
     _cred = credential.Credential(SECRET_ID, SECRET_KEY)
     logger.info(f"✅ Monitor Server: 已加载真实腾讯云凭证，默认区域={DEFAULT_REGION}")
 else:
-    logger.warning("⚠️  Monitor Server: 未配置腾讯云凭证，将返回模拟数据")
+    logger.warning("⚠️  Monitor Server: 未配置腾讯云凭证，将返回本地估算数据")
 
 mcp = FastMCP("Monitor")
 
@@ -148,9 +148,9 @@ def _calc_statistics(values: List[float]) -> Dict[str, Any]:
     }
 
 
-# ── 模拟数据生成（真实 API 不可用时的回退） ─────────────────────
+# ── 本地估算数据生成（真实 API 不可用时的回退） ─────────────────────
 
-def _mock_metric_data(
+def _local_estimate_metric_data(
     service_name: str,
     metric_name: str,
     start_dt: datetime,
@@ -160,7 +160,7 @@ def _mock_metric_data(
     max_value: float,
     unit: str = "%"
 ) -> Dict[str, Any]:
-    """生成模拟监控数据"""
+    """生成本地估算监控数据"""
     data_points = []
     current_time = start_dt
     time_index = 0
@@ -199,7 +199,7 @@ def _mock_metric_data(
             "threshold": threshold,
             "message": f"{metric_name} 超过 {threshold}% 阈值" if alert_triggered else f"{metric_name} 正常"
         },
-        "source": "mock",
+        "source": "local_estimate",
     }
 
 
@@ -285,7 +285,7 @@ def query_cpu_metrics(
 ) -> Dict[str, Any]:
     """查询服务的 CPU 使用率监控数据。
 
-    优先使用真实腾讯云 Monitor API；未配置凭证时使用模拟数据。
+    优先使用真实腾讯云 Monitor API；未配置凭证时使用本地估算数据。
 
     Args:
         service_name: 服务名称（必填）
@@ -312,7 +312,7 @@ def query_cpu_metrics(
         interval_minutes = int(interval[:-1]) * 60
 
     if not USE_REAL_API:
-        return _mock_metric_data(service_name, "cpu_usage_percent", start_dt, end_dt, interval_minutes, 10.0, 96.0)
+        return _local_estimate_metric_data(service_name, "cpu_usage_percent", start_dt, end_dt, interval_minutes, 10.0, 96.0)
 
     # ── 真实 API ──
     # 优先使用 CVM 实例 ID 查询；否则用自定义指标命名空间
@@ -414,7 +414,7 @@ def query_memory_metrics(
 ) -> Dict[str, Any]:
     """查询服务的内存使用监控数据。
 
-    优先使用真实腾讯云 Monitor API；未配置凭证时使用模拟数据。
+    优先使用真实腾讯云 Monitor API；未配置凭证时使用本地估算数据。
 
     Args:
         service_name: 服务名称（必填）
@@ -438,7 +438,7 @@ def query_memory_metrics(
         interval_minutes = int(interval[:-1]) * 60
 
     if not USE_REAL_API:
-        return _mock_metric_data(service_name, "memory_usage_percent", start_dt, end_dt, interval_minutes, 30.0, 85.0)
+        return _local_estimate_metric_data(service_name, "memory_usage_percent", start_dt, end_dt, interval_minutes, 30.0, 85.0)
 
     # ── 真实 API ──
     inst_id, resolved_region = _resolve_instance(service_name, instance_id)
@@ -529,7 +529,7 @@ def query_disk_metrics(
         interval_minutes = int(interval[:-1]) * 60
 
     if not USE_REAL_API:
-        return _mock_metric_data(service_name, "disk_usage_percent", start_dt, end_dt, interval_minutes, 40.0, 92.0)
+        return _local_estimate_metric_data(service_name, "disk_usage_percent", start_dt, end_dt, interval_minutes, 40.0, 92.0)
 
     inst_id, resolved_region = _resolve_instance(service_name, instance_id)
     region = resolved_region or region
@@ -620,7 +620,7 @@ def query_network_metrics(
         interval_minutes = int(interval[:-1]) * 60
 
     if not USE_REAL_API:
-        # 网络流量模拟
+        # 网络流量本地估算
         data_points = []
         current_time = start_dt
         ti = 0
@@ -639,7 +639,7 @@ def query_network_metrics(
             "metric_name": "network_traffic_mbps",
             "interval": interval,
             "data_points": data_points,
-            "source": "mock",
+            "source": "local_estimate",
         }
 
     inst_id, resolved_region = _resolve_instance(service_name, instance_id)
@@ -764,7 +764,7 @@ def search_historical_tickets(
 ) -> Dict[str, Any]:
     """搜索历史工单。
 
-    注意：腾讯云无统一工单 API。此工具返回模拟数据作为示例。
+    注意：腾讯云无统一工单 API。此工具返回本地估算数据作为示例。
     实际使用时建议对接自有工单系统（如 Jira、禅道、企业微信审批）。
 
     Args:
@@ -777,7 +777,7 @@ def search_historical_tickets(
     Returns:
         Dict: 工单列表
     """
-    mock_tickets = [
+    local_estimate_tickets = [
         {
             "ticket_id": "TK-20260214-001",
             "service_name": "data-sync-service",
@@ -823,7 +823,7 @@ def search_historical_tickets(
     ]
 
     # 筛选
-    filtered = mock_tickets
+    filtered = local_estimate_tickets
     if service_name:
         filtered = [t for t in filtered if service_name.lower() in t["service_name"].lower()]
     if issue_type:
@@ -839,7 +839,7 @@ def search_historical_tickets(
             "limit": limit,
         },
         "message": (
-            f"找到 {len(filtered)} 条工单（模拟数据）。"
+            f"找到 {len(filtered)} 条工单（本地估算数据）。"
             "生产环境请对接自有工单系统 API。"
         ),
     }

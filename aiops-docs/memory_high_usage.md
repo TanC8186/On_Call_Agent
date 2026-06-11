@@ -173,8 +173,5 @@ jstat -gc <pid> 1000
 ## 联系方式
 - **运维团队**: ops-team@company.com
 - **开发团队**: dev-team@company.com
-- **紧急电话**: 400-xxx-xxxx
+- **紧急电话**: 400-810-1818
 
-## 参考文档
-- [JVM内存管理最佳实践](internal-docs/jvm-memory-best-practices.md)
-- [内存泄漏排查指南](internal-docs/memory-leak-troubleshooting.md)

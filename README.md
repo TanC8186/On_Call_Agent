@@ -10,7 +10,7 @@
 [![MCP](https://img.shields.io/badge/Protocol-MCP-red)](https://modelcontextprotocol.io/)
 [![License](https://img.shields.io/badge/License-MIT-green)](./LICENSE)
 
-**基于 LangGraph Plan-Execute-Replan 工作流 + MCP 多服务架构的 AIOps 智能故障诊断系统**
+**LangGraph Plan-Execute-Replan 工作流 · MCP 多服务架构 · 腾讯云真实 API 集成**
 
 </div>
 

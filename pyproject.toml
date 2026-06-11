@@ -1,8 +1,8 @@
 [project]
-name = "super-biz-agent-py"
+name = "on-call-agent"
 version = "1.2.1"
-description = "基于 LangChain 的智能业务代理系统 - 支持 RAG 知识库和 AIOps 智能运维"
-authors = [{name = "chief"}]
+description = "企业级智能 On-Call 运维助手 — AIOps 自动故障诊断、RAG 知识库问答、MCP 多服务架构"
+authors = [{name = "Your Name", email = "your-email@example.com"}]
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
 dependencies = [

@@ -3,7 +3,7 @@ chcp 65001 >nul
 setlocal enabledelayedexpansion
 
 echo ====================================
-echo 启动 SuperBizAgent 服务
+echo 启动 OnCallAgent 服务
 echo ====================================
 echo.
 
@@ -76,7 +76,7 @@ echo.
 
 REM 启动 FastAPI Web 服务
 echo [6/7] 启动 FastAPI Web 服务（端口 9900）...
-start "SuperBizAgent API" %PYTHON_CMD% servers/web_server.py
+start "OnCallAgent API" %PYTHON_CMD% servers/web_server.py
 echo [信息] 等待服务启动（15秒）...
 timeout /t 15 /nobreak >nul
 echo.

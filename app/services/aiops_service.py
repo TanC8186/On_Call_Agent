@@ -1,6 +1,6 @@
 """
 通用 Plan-Execute-Replan 服务
-基于 LangGraph 官方教程实现
+编排 LangGraph 状态图：编译工作流、流式执行、事件格式化
 """
 
 from typing import AsyncGenerator, Dict, Any

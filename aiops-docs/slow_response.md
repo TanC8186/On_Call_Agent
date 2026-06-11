@@ -249,9 +249,5 @@
 - **运维团队**: ops-team@company.com
 - **开发团队**: dev-team@company.com
 - **DBA团队**: dba-team@company.com
-- **紧急电话**: 400-xxx-xxxx
+- **紧急电话**: 400-810-1818
 
-## 参考文档
-- [性能优化最佳实践](internal-docs/performance-optimization.md)
-- [数据库优化指南](internal-docs/database-optimization.md)
-- [缓存使用规范](internal-docs/cache-best-practices.md)

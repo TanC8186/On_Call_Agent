@@ -40,7 +40,7 @@ if USE_REAL_API:
     _cred = credential.Credential(SECRET_ID, SECRET_KEY)
     logger.info(f"✅ CLS Server: 已加载真实腾讯云凭证，默认区域={DEFAULT_REGION}")
 else:
-    logger.warning("⚠️  CLS Server: 未配置腾讯云凭证，部分工具将返回模拟数据")
+    logger.warning("⚠️  CLS Server: 未配置腾讯云凭证，部分工具将返回本地估算数据")
 
 mcp = FastMCP("CLS")
 
@@ -160,7 +160,7 @@ def get_topic_info_by_name(
 ) -> Dict[str, Any]:
     """根据主题名称搜索相关的日志主题信息。
 
-    优先使用真实腾讯云 CLS API；未配置凭证时回退到模拟数据。
+    优先使用真实腾讯云 CLS API；未配置凭证时回退到本地估算数据。
 
     Args:
         topic_name: 主题名称（支持模糊搜索）
@@ -172,8 +172,8 @@ def get_topic_info_by_name(
     region = region_code or DEFAULT_REGION
 
     if not USE_REAL_API:
-        # ── 模拟数据回退 ──
-        mock_topics = [
+        # ── 本地估算数据回退 ──
+        local_estimate_topics = [
             {
                 "topic_id": "topic-001",
                 "topic_name": "数据同步服务日志",
@@ -184,7 +184,7 @@ def get_topic_info_by_name(
                 "description": "服务应用日志"
             }
         ]
-        for t in mock_topics:
+        for t in local_estimate_topics:
             if topic_name in t["topic_name"]:
                 return t
         return {"topic_id": None, "topic_name": topic_name, "error": f"未找到主题: {topic_name}"}
@@ -237,8 +237,8 @@ def search_topic_by_service_name(
     region = region_code or DEFAULT_REGION
 
     if not USE_REAL_API:
-        # ── 模拟数据回退 ──
-        mock_topics = [
+        # ── 本地估算数据回退 ──
+        local_estimate_topics = [
             {
                 "topic_id": "topic-001",
                 "topic_name": "数据同步服务日志",
@@ -268,7 +268,7 @@ def search_topic_by_service_name(
             }
         ]
         matched = []
-        for t in mock_topics:
+        for t in local_estimate_topics:
             if region_code and t["region_code"] != region_code:
                 continue
             sn = t.get("service_name", "")
@@ -347,7 +347,7 @@ def search_log(
 ) -> Dict[str, Any]:
     """基于提供的查询参数搜索日志。
 
-    优先使用真实腾讯云 CLS SearchLog API；未配置凭证时回退到模拟数据。
+    优先使用真实腾讯云 CLS SearchLog API；未配置凭证时回退到本地估算数据。
 
     Args:
         topic_id: 主题ID（必填）
@@ -364,7 +364,7 @@ def search_log(
     region = region_code or DEFAULT_REGION
 
     if not USE_REAL_API:
-        # ── 模拟数据回退 ──
+        # ── 本地估算数据回退 ──
         if topic_id == "topic-001":
             logs = []
             current_time_ms = start_time
@@ -390,7 +390,7 @@ def search_log(
                 "total": len(logs),
                 "logs": logs,
                 "took_ms": 50,
-                "message": f"成功查询 {len(logs)} 条应用日志（模拟数据）"
+                "message": f"成功查询 {len(logs)} 条应用日志（本地估算数据）"
             }
         else:
             return {

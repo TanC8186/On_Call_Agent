@@ -1,8 +1,6 @@
-"""向量嵌入服务模块 - 基于 LangChain Embeddings 标准接口
+"""向量嵌入服务模块 - 多提供商 Embedding 支持
 
-支持多种 Embedding 提供商，通过 .env 中的 EMBEDDING_PROVIDER 切换：
-- dashscope: 阿里云 DashScope Text Embedding
-- openai: OpenAI Embedding API
+支持 local / dashscope / openai 三种 Embedding 提供商切换。
 - local: 本地 sentence-transformers 模型（无需 API Key）
 """
 

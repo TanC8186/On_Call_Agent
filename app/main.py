@@ -52,14 +52,14 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=config.app_name,
     version=config.app_version,
-    description="基于 LangChain 的智能oncall运维系统",
+    description="企业级智能 On-Call 运维助手 — AIOps 自动故障诊断与 RAG 知识库问答",
     lifespan=lifespan
 )
 
 # 配置 CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 生产环境应该限制具体域名
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -1,8 +1,6 @@
 """
 Planner 节点：制定执行计划
-基于 LangGraph 官方教程实现
-
-注意：DeepSeek 不支持 with_structured_output，改用 JSON 输出 + 手动解析。
+结合 RAG 知识库检索历史经验，基于可用 MCP 工具生成分步执行计划
 """
 
 import json

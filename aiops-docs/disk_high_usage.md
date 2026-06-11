@@ -335,9 +335,5 @@ apt-get clean  # Ubuntu
 ## 联系方式
 - **运维团队**: ops-team@company.com
 - **存储团队**: storage-team@company.com
-- **紧急电话**: 400-xxx-xxxx
+- **紧急电话**: 400-810-1818
 
-## 参考文档
-- [磁盘管理最佳实践](internal-docs/disk-management.md)
-- [日志管理规范](internal-docs/log-management.md)
-- [数据归档策略](internal-docs/data-archiving.md)

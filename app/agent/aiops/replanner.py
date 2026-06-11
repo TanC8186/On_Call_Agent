@@ -1,8 +1,6 @@
 """
-Replanner 节点：重新规划或生成最终响应
-基于 LangGraph 官方教程实现
-
-注意：DeepSeek 不支持 with_structured_output，改用 JSON 输出 + 手动解析。
+Replanner 节点：评估执行结果并决定下一步动作
+根据已收集的数据判断是否继续执行、重新规划或生成最终诊断报告
 """
 
 import json
@@ -83,10 +81,10 @@ RESPONSE_SYSTEM_TEMPLATE = dedent("""
     - 清晰、结构化，使用 Markdown 格式
     - **必须使用执行历史中的实际数值和指标数据**，不得编造
     - 如果执行结果中 source 字段为 "tencent_cloud"，说明数据来自真实腾讯云 API
-    - 如果执行结果中 source 字段为 "mock"，说明数据来自模拟
+    - 如果执行结果中 source 字段为 "local_estimate"，说明数据来自本地估算
     - 如果执行结果中 source 字段为 "unsupported"，说明该指标当前服务器类型不支持
     - 如果某个步骤失败或未执行，在报告中明确标注该指标为"未获取"而非编造数据
-    - **严禁在报告中出现"模拟数据"字样，除非执行结果中 source 确实为 mock**
+    - **如果某指标 source 为 local_estimate，说明该指标为本地估算值**
 
     你必须以 JSON 格式输出：
     {"response": "你的 Markdown 格式完整响应"}

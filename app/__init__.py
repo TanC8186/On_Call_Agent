@@ -1,6 +1,6 @@
-"""SuperBizAgent Python 版本
+"""On-Call Agent — 企业级智能运维助手
 
-基于 LangChain 的智能业务代理系统
+集 RAG 知识库问答和 AIOps 智能故障诊断于一体
 """
 
 __version__ = "1.0.0"

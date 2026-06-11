@@ -1,4 +1,4 @@
-"""文档分割服务模块 - 基于 LangChain 的智能文档分割"""
+"""文档分割服务模块 - Markdown 标题分割 + 递归字符分割 + 小片段合并"""
 
 from pathlib import Path
 from typing import List

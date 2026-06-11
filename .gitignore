@@ -42,6 +42,9 @@ poetry.lock
 # CodeBuddy
 .codebuddy/
 
+# AI assistant config
+CLAUDE.md
+
 # Environment
 .env
 .env.local

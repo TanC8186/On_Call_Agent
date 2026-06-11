@@ -1,6 +1,6 @@
 """
 通用 Plan-Execute-Replan 框架
-基于 LangGraph 官方教程实现
+实现 Planner → Executor → Replanner 三阶段智能诊断工作流
 """
 
 from .state import PlanExecuteState

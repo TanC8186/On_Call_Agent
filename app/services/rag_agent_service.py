@@ -1,8 +1,6 @@
-"""RAG Agent 服务 - 基于 LangGraph 的智能代理
+"""RAG Agent 服务 - LangGraph 多轮对话 + 流式输出
 
-使用 LangChain ChatOpenAI (OpenAI 兼容模式)，支持 DeepSeek / DashScope / OpenAI 等。
-通过 .env 配置切换：
-- DeepSeek:  LLM_BASE_URL=https://api.deepseek.com  LLM_MODEL=deepseek-chat
+支持 DeepSeek / DashScope / OpenAI 等多种 LLM 后端切换。
 - DashScope: LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1  LLM_MODEL=qwen-max
 """
 
