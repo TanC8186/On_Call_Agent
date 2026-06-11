@@ -2,7 +2,7 @@
 name = "on-call-agent"
 version = "1.2.1"
 description = "企业级智能 On-Call 运维助手 — AIOps 自动故障诊断、RAG 知识库问答、MCP 多服务架构"
-authors = [{name = "TanC", email = "tanc8186@outlook.com"}]
+authors = [{name = "TanC", email = "2677510433@qq.com"}]
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
 dependencies = [
