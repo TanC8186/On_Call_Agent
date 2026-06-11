@@ -317,7 +317,7 @@ def _get_namespace_for_instance(instance_id: str) -> str:
 
 ## 📝 License
 
-MIT © chief
+MIT © TanC
 
 ---
 
