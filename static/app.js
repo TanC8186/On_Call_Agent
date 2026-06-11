@@ -1056,24 +1056,21 @@ class OnCallAgentApp {
             right: 20px;
             padding: 15px 20px;
             border-radius: 8px;
-            color: #c9d1d9;
+            color: white;
             font-weight: 500;
-            background: #0d1117;
-            border: 1px solid #39ff14;
             z-index: 10000;
             animation: slideIn 0.3s ease;
             max-width: 300px;
         `;
 
-        // Terminal Green 配色
+        // 根据类型设置颜色（Google Material Design配色）
         const colors = {
-            info: '#39ff14',
-            success: '#3fb950',
-            warning: '#f0883e',
-            error: '#ff3333'
+            info: '#1a73e8',
+            success: '#34a853',
+            warning: '#fbbc04',
+            error: '#ea4335'
         };
-        notification.style.backgroundColor = '#0d1117';
-        notification.style.borderLeft = `4px solid ${colors[type] || colors.info}`;
+        notification.style.backgroundColor = colors[type] || colors.info;
 
         // 添加到页面
         document.body.appendChild(notification);
