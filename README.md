@@ -193,7 +193,24 @@ python servers/ssh_server.py      # 终端3: SSH MCP → :8005
 python servers/web_server.py      # 终端4: FastAPI → :9900
 ```
 
-### 5. 访问
+### 5. Docker 一键部署（推荐）
+
+```bash
+# 配置环境变量
+cp .env.docker .env
+# 编辑 .env，填入 API 密钥
+
+# 一键启动全栈服务（Milvus + App）
+docker compose up -d
+
+# 查看日志
+docker compose logs -f app
+
+# 停止
+docker compose down
+```
+
+### 6. 访问
 
 | 地址 | 功能 |
 |------|------|

@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+.codebuddy/
+
+# Sensitive
+.env
+*.pem
+*.key
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose.yml
+volumes/
+
+# Logs & temp
+logs/
+uploads/
+*.log
+*.pid
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test
+.pytest_cache/
+.coverage
+htmlcov/
