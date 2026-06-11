@@ -9,11 +9,6 @@ ENV HF_HUB_ENDPOINT=https://hf-mirror.com
 ENV PIP_NO_CACHE_DIR=1
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# 安装系统依赖
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /app
 
 # 先复制依赖文件，利用 Docker 缓存层
@@ -23,11 +18,6 @@ COPY pyproject.toml uv.lock ./
 RUN pip install --no-cache-dir uv \
     && uv pip install --system -e . \
     && rm -rf /root/.cache
-
-# 预下载 Embedding 模型（避免首次启动耗时）
-RUN python -c "\
-from sentence_transformers import SentenceTransformer; \
-SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')"
 
 # 复制项目代码
 COPY . .

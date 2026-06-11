@@ -28,6 +28,10 @@ dependencies = [
     "langchain-milvus>=0.3.3",
     "langchain-text-splitters>=1.1.0",
     "langchain-mcp-adapters>=0.2.1",
+    "langchain-huggingface>=0.2.0",
+    "sentence-transformers>=3.0.0",
+    "tencentcloud-sdk-python>=3.0.0",
+    "paramiko>=3.4.0",
     "fastmcp>=2.14.0",
     "langchain-qwq>=0.3.4",
 ]

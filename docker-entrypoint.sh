@@ -7,16 +7,20 @@ echo "============================================"
 
 # 等待 Milvus 就绪
 echo "[1/4] 等待 Milvus 启动..."
-for i in $(seq 1 30); do
-    if curl -s "http://${MILVUS_HOST:-milvus-standalone}:9091/healthz" > /dev/null 2>&1; then
-        echo "  ✅ Milvus 已就绪"
+python -c "
+import time, urllib.request, os
+host = os.environ.get('MILVUS_HOST', 'milvus-standalone')
+url = f'http://{host}:9091/healthz'
+for i in range(30):
+    try:
+        urllib.request.urlopen(url, timeout=2)
+        print('  ✅ Milvus 已就绪')
         break
-    fi
-    if [ $i -eq 30 ]; then
-        echo "  ⚠️  Milvus 连接超时，RAG 功能将不可用"
-    fi
-    sleep 2
-done
+    except Exception:
+        if i == 29:
+            print('  ⚠️  Milvus 连接超时，RAG 功能将不可用')
+        time.sleep(2)
+"
 
 # 启动 MCP 服务
 echo "[2/4] 启动 MCP 服务..."
