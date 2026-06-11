@@ -33,11 +33,11 @@ class VectorStoreManager:
             return True
         self._initialized = True
         try:
+            # 必须先建立 ORM 连接（langchain_milvus 内部用 Collection(using=alias)）
             _ = milvus_manager.connect()
 
             connection_args = {
-                "host": config.milvus_host,
-                "port": config.milvus_port,
+                "uri": f"http://{config.milvus_host}:{config.milvus_port}",
             }
 
             self.vector_store = Milvus(

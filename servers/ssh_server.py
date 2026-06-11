@@ -115,7 +115,7 @@ def get_system_info() -> Dict[str, Any]:
     if SERVER_TYPE == "windows":
         cmds = [
             "systeminfo | findstr /C:'OS' /C:'System' /C:'Processor' /C:'Memory' /C:'Time'",
-            "wmic cpu get Name,NumberOfCores,MaxClockSpeed /format:list",
+            "wmic cpu get Name,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed /format:list",
             "wmic memorychip get Capacity,Speed /format:list",
             "wmic logicaldisk get DeviceID,Size,FreeSpace /format:list",
         ]

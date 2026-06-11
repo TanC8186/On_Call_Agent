@@ -95,7 +95,10 @@ services:
       - MCP_SSH_TRANSPORT=streamable-http
       - MCP_SSH_URL=http://localhost:8005/mcp
 
-      # ── HuggingFace 镜像 ──
+      # ── Embedding 模型 ──
+      - EMBEDDING_PROVIDER=local
+      - EMBEDDING_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+      - EMBEDDING_API_KEY=
       - HF_ENDPOINT=https://hf-mirror.com
 
       # ── 以下从 .env 或宿主机环境继承 ──
@@ -112,7 +115,7 @@ services:
       - SSH_SERVER_TYPE=${SSH_SERVER_TYPE:-windows}
     volumes:
       # 挂载 HuggingFace 模型缓存（避免重复下载）
-      - ${HF_CACHE_DIR:-~/.cache/huggingface}:/root/.cache/huggingface:ro
+      - ${HF_CACHE_DIR:-~/.cache/huggingface}:/root/.cache/huggingface:rw
       # 挂载 SSH 私钥（如不需要 SSH 功能可删除此行）
       - ${SSH_KEY_FILE:-/dev/null}:/app/ssh_key.pem:ro
     depends_on:
