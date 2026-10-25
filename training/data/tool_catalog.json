@@ -1,0 +1,827 @@
+{
+  "tools": {
+    "query_cpu_metrics": {
+      "description": "查询服务的 CPU 使用率监控数据。\n\n优先使用真实腾讯云 Monitor API；未配置凭证时使用本地估算数据。",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "service_name": {
+            "type": "string",
+            "description": "服务名称（必填）"
+          },
+          "instance_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "CVM 实例 ID（可选，如 ins-xxxxxxxx）\n         腾讯云 API 需要实例 ID 来查询 CVM 指标。\n         如果不提供，将使用 service_name 作为维度值查询自定义指标。"
+          },
+          "start_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "开始时间（可选，格式 \"YYYY-MM-DD HH:MM:SS\"，默认1小时前）"
+          },
+          "end_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "结束时间（可选，格式 \"YYYY-MM-DD HH:MM:SS\"，默认当前时间）"
+          },
+          "interval": {
+            "default": "1m",
+            "type": "string",
+            "description": "数据聚合间隔（可选，\"1m\"/\"5m\"/\"1h\"，默认 \"1m\"）"
+          },
+          "region_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "地区代码（可选，默认 ap-beijing）"
+          }
+        },
+        "required": [
+          "service_name"
+        ],
+        "type": "object"
+      }
+    },
+    "query_memory_metrics": {
+      "description": "查询服务的内存使用监控数据。\n\n优先使用真实腾讯云 Monitor API；未配置凭证时使用本地估算数据。",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "service_name": {
+            "type": "string",
+            "description": "服务名称（必填）"
+          },
+          "instance_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "CVM 实例 ID（可选，如 ins-xxxxxxxx）"
+          },
+          "start_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "开始时间（可选，格式 \"YYYY-MM-DD HH:MM:SS\"，默认1小时前）"
+          },
+          "end_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "结束时间（可选，格式 \"YYYY-MM-DD HH:MM:SS\"，默认当前时间）"
+          },
+          "interval": {
+            "default": "1m",
+            "type": "string",
+            "description": "数据聚合间隔（可选，\"1m\"/\"5m\"/\"1h\"，默认 \"1m\"）"
+          },
+          "region_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "地区代码（可选）"
+          }
+        },
+        "required": [
+          "service_name"
+        ],
+        "type": "object"
+      }
+    },
+    "query_disk_metrics": {
+      "description": "查询服务的磁盘使用监控数据。",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "service_name": {
+            "type": "string",
+            "description": "服务名称（必填）"
+          },
+          "instance_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "CVM 实例 ID（可选）"
+          },
+          "start_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "开始时间（可选）"
+          },
+          "end_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "结束时间（可选）"
+          },
+          "interval": {
+            "default": "5m",
+            "type": "string",
+            "description": "数据聚合间隔（可选，默认 \"5m\"）"
+          },
+          "region_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "地区代码（可选）"
+          }
+        },
+        "required": [
+          "service_name"
+        ],
+        "type": "object"
+      }
+    },
+    "query_network_metrics": {
+      "description": "查询服务的网络流量监控数据。",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "service_name": {
+            "type": "string",
+            "description": "服务名称（必填）"
+          },
+          "instance_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "CVM 实例 ID（可选）"
+          },
+          "start_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "开始时间（可选）"
+          },
+          "end_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "结束时间（可选）"
+          },
+          "interval": {
+            "default": "5m",
+            "type": "string",
+            "description": "数据聚合间隔（可选，默认 \"5m\"）"
+          },
+          "region_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "地区代码（可选）"
+          }
+        },
+        "required": [
+          "service_name"
+        ],
+        "type": "object"
+      }
+    },
+    "query_process_list": {
+      "description": "查询服务所在实例的进程列表。\n\n注意：腾讯云默认监控不提供进程列表功能，需要通过 TAT（自动化助手）\n或自建 Agent 获取。此工具当前返回说明信息。",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "service_name": {
+            "type": "string",
+            "description": "服务名称"
+          },
+          "instance_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "CVM 实例 ID（可选）"
+          },
+          "region_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "地区代码（可选）"
+          }
+        },
+        "required": [
+          "service_name"
+        ],
+        "type": "object"
+      }
+    },
+    "search_historical_tickets": {
+      "description": "搜索历史工单。\n\n注意：腾讯云无统一工单 API，本仓库也未接入真实工单系统。\nDEMO_MODE=1 时返回演示工单；否则返回 unavailable，绝不伪造工单号。",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "service_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "服务名称（可选）"
+          },
+          "issue_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "问题类型（可选，如 cpu/memory/disk/network）"
+          },
+          "start_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "开始时间（可选）"
+          },
+          "end_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "结束时间（可选）"
+          },
+          "limit": {
+            "default": 10,
+            "type": "integer",
+            "description": "返回条数（默认 10）"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "get_service_info": {
+      "description": "获取服务的基本信息和当前状态。\n\n整合了多种数据源（监控指标 + 日志），提供服务的全景视图。",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "service_name": {
+            "type": "string",
+            "description": "服务名称"
+          },
+          "region_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "地区代码（可选）"
+          }
+        },
+        "required": [
+          "service_name"
+        ],
+        "type": "object"
+      }
+    },
+    "list_all_services": {
+      "description": "列出所有已知服务和其实例映射。\n\n返回服务名与 CVM 实例 ID 的对照表，方便后续查询具体指标时使用。",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "region_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "地区代码（可选）"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "get_current_timestamp": {
+      "description": "获取当前时间戳（以毫秒为单位）。\n\n此工具用于获取标准的毫秒时间戳，可用于：\n1. 作为 search_log 的 end_time 参数（查询到现在）\n2. 计算历史时间点作为 start_time 参数\n\nReturns:\n    int: 当前时间戳（毫秒），例如: 1708012345000\n\n使用示例:\n    current = get_current_timestamp()\n    fifteen_min_ago = current - (15 * 60 * 1000)",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      }
+    },
+    "get_region_code_by_name": {
+      "description": "根据地区名称搜索对应的地区参数。",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "region_name": {
+            "type": "string",
+            "description": "地区名称（如：北京、上海、广州等）"
+          }
+        },
+        "required": [
+          "region_name"
+        ],
+        "type": "object"
+      }
+    },
+    "get_topic_info_by_name": {
+      "description": "根据主题名称搜索相关的日志主题信息。\n\n优先使用真实腾讯云 CLS API；未配置凭证时只有 DEMO_MODE=1 才返回演示数据。",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "topic_name": {
+            "type": "string",
+            "description": "主题名称（支持模糊搜索）"
+          },
+          "region_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "地区代码（可选）"
+          }
+        },
+        "required": [
+          "topic_name"
+        ],
+        "type": "object"
+      }
+    },
+    "search_topic_by_service_name": {
+      "description": "根据服务名称搜索相关的日志主题信息，支持模糊搜索。",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "service_name": {
+            "type": "string",
+            "description": "服务名称（必填）"
+          },
+          "region_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "地区代码（可选）"
+          },
+          "fuzzy": {
+            "default": true,
+            "type": "boolean",
+            "description": "是否启用模糊搜索（默认 True）"
+          }
+        },
+        "required": [
+          "service_name"
+        ],
+        "type": "object"
+      }
+    },
+    "search_log": {
+      "description": "基于提供的查询参数搜索日志。\n\n优先使用真实腾讯云 CLS SearchLog API；未配置凭证时只有 DEMO_MODE=1 才返回演示数据。",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "topic_id": {
+            "type": "string",
+            "description": "主题ID（必填）"
+          },
+          "start_time": {
+            "type": "integer",
+            "description": "开始时间戳，单位为毫秒（必填，int类型）"
+          },
+          "end_time": {
+            "type": "integer",
+            "description": "结束时间戳，单位为毫秒（必填，int类型）"
+          },
+          "query": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "查询语句（可选，CLS 检索语法）\n示例: \"level:ERROR\" 或 \"message:timeout\""
+          },
+          "limit": {
+            "default": 100,
+            "type": "integer",
+            "description": "返回结果数量限制（默认100）"
+          },
+          "region_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "地区代码（可选）"
+          }
+        },
+        "required": [
+          "topic_id",
+          "start_time",
+          "end_time"
+        ],
+        "type": "object"
+      }
+    },
+    "search_service_logs": {
+      "description": "根据服务名称搜索日志，支持级别筛选和关键词搜索。\n\n这是一个高级封装：自动根据 service_name 查找 topic，再执行日志搜索。",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "service_name": {
+            "type": "string",
+            "description": "服务名称（必填）"
+          },
+          "log_level": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "日志级别过滤（可选）如 ERROR, WARN, INFO"
+          },
+          "keyword": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "关键词搜索（可选）"
+          },
+          "start_time": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "开始时间戳毫秒（可选，默认15分钟前）"
+          },
+          "end_time": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "结束时间戳毫秒（可选，默认当前时间）"
+          },
+          "limit": {
+            "default": 100,
+            "type": "integer",
+            "description": "返回条数（默认100）"
+          },
+          "region_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "地区代码（可选）"
+          }
+        },
+        "required": [
+          "service_name"
+        ],
+        "type": "object"
+      }
+    },
+    "analyze_log_pattern": {
+      "description": "分析服务的日志模式，统计各级别日志数量和常见错误。",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "service_name": {
+            "type": "string",
+            "description": "服务名称（必填）"
+          },
+          "start_time": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "开始时间戳毫秒（可选，默认30分钟前）"
+          },
+          "end_time": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "结束时间戳毫秒（可选，默认当前时间）"
+          },
+          "region_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "地区代码（可选）"
+          }
+        },
+        "required": [
+          "service_name"
+        ],
+        "type": "object"
+      }
+    },
+    "get_system_info": {
+      "description": "获取远程服务器系统基本信息（OS、CPU、内存、磁盘、网络等只读信息）。\n\n无需参数。\n\nReturns:\n    Dict: 系统基本信息",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      }
+    },
+    "get_process_list": {
+      "description": "获取远程服务器当前运行的进程列表（只读）。",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "sort_by": {
+            "default": "memory",
+            "type": "string",
+            "description": "排序方式，\"cpu\" 或 \"memory\"，默认 \"memory\""
+          }
+        },
+        "type": "object"
+      }
+    },
+    "search_system_logs": {
+      "description": "搜索 Windows 事件日志或 Linux 系统日志（只读）。",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "log_type": {
+            "default": "System",
+            "type": "string",
+            "description": "日志类型。Windows: System/Application/Security；Linux: syslog/auth/kern"
+          },
+          "count": {
+            "default": 30,
+            "type": "integer",
+            "description": "返回条数，默认 30"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "过滤级别。Windows: 1=Critical 2=Error 3=Warning 4=Info；Linux: err/warn/info"
+          },
+          "keyword": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "关键词过滤（可选）"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "check_disk_usage": {
+      "description": "检查远程服务器磁盘使用情况（只读）。",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "default": "C:/",
+            "type": "string",
+            "description": "要检查的路径，默认 C:/"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "read_log_file": {
+      "description": "读取服务器上的指定日志文件（只读，仅限日志目录）。\n\n安全约束：只允许读取以下目录下的文件：\n- C:/logs/, C:/ProgramData/logs/, C:/inetpub/logs/\n- /var/log/, /opt/logs/",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "file_path": {
+            "type": "string",
+            "description": "文件完整路径"
+          },
+          "lines": {
+            "default": 50,
+            "type": "integer",
+            "description": "读取行数，默认 50"
+          }
+        },
+        "required": [
+          "file_path"
+        ],
+        "type": "object"
+      }
+    },
+    "get_current_time": {
+      "description": "获取当前时间，用于构造日志查询的时间窗。",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    "retrieve_knowledge": {
+      "description": "从运维知识库检索历史经验与处置手册。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "检索问题"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    }
+  }
+}

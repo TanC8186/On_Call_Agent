@@ -1,0 +1,19 @@
+id: memory-high-001
+title: 内存使用率持续过高
+symptom: agent-test-server 的内存使用率超过 85%，出现 OOM 告警
+service: agent-test-server
+expect_no_incident: false
+gold_tools:
+  - list_all_services
+  - query_memory_metrics
+  - get_process_list
+  - search_log
+gold_facts:
+  - metric: memory_usage_percent
+    op: ">"
+    value: 85
+forbidden_claims:
+  - 磁盘已满
+  - CPU 使用率 100%
+max_steps: 8
+notes: 合成场景，用于验证工具调用与数值引用；不是真实生产事故。

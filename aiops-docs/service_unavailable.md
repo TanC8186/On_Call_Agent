@@ -19,7 +19,7 @@
 **目的**: 记录故障发生时间，用于后续分析
 
 ### 步骤2: 查询服务状态日志
-**工具**: `query_logs`
+**工具**: `search_log`
 **参数要求**:
 - **地域**: `ap-guangzhou`
 - **日志主题**: `application-logs`
@@ -35,14 +35,14 @@
 ```
 
 ### 步骤3: 查询系统事件日志
-**工具**: `query_logs`
+**工具**: `search_log`
 **参数要求**:
 - **地域**: `ap-guangzhou`
 - **日志主题**: `system-events`
 - **查询条件**: `event:restart OR event:crash OR event:oom_kill`
 
 ### 步骤4: 检查依赖服务状态
-**工具**: `query_logs`
+**工具**: `search_log`
 **参数要求**:
 - **地域**: `ap-guangzhou`
 - **日志主题**: `application-logs`

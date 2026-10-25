@@ -102,9 +102,10 @@ services:
       - HF_ENDPOINT=https://hf-mirror.com
 
       # ── 以下从 .env 或宿主机环境继承 ──
+      - LLM_PROVIDER=${LLM_PROVIDER:-anthropic}
       - LLM_API_KEY=${LLM_API_KEY:-}
-      - LLM_BASE_URL=${LLM_BASE_URL:-https://api.deepseek.com}
-      - LLM_MODEL=${LLM_MODEL:-deepseek-chat}
+      - LLM_BASE_URL=${LLM_BASE_URL:-https://www.autodl.art/api/v1/anthropic}
+      - LLM_MODEL=${LLM_MODEL:-claude-sonnet-4-6}
       - TENCENTCLOUD_SECRET_ID=${TENCENTCLOUD_SECRET_ID:-}
       - TENCENTCLOUD_SECRET_KEY=${TENCENTCLOUD_SECRET_KEY:-}
       - TENCENTCLOUD_REGION=${TENCENTCLOUD_REGION:-ap-beijing}
@@ -113,6 +114,10 @@ services:
       - SSH_USER=${SSH_USER:-Administrator}
       - SSH_KEY_FILE=${SSH_KEY_FILE:-/app/ssh_key.pem}
       - SSH_SERVER_TYPE=${SSH_SERVER_TYPE:-windows}
+      # 无云凭证时的合成数据开关；0 = 直接报 unavailable
+      - DEMO_MODE=${DEMO_MODE:-0}
+      - API_KEY=${API_KEY:-}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:9900,http://127.0.0.1:9900}
     volumes:
       # 挂载 HuggingFace 模型缓存（避免重复下载）
       - ${HF_CACHE_DIR:-~/.cache/huggingface}:/root/.cache/huggingface:rw

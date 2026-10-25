@@ -1,0 +1,12 @@
+{
+  "_comment": "服务清单：新增服务时填写 service_name / instance_id / region / type。instance_id 必须是真实云实例 ID（ins-* 或 lhins-*），不要填写伪造值。",
+  "services": [
+    {
+      "service_name": "agent-test-server",
+      "instance_id": "lhins-nst2h9mv",
+      "region": "ap-guangzhou",
+      "status": "active",
+      "type": "lighthouse"
+    }
+  ]
+}

@@ -9,7 +9,9 @@
 """
 
 import os
+import re
 import sys
+import shlex
 import logging
 import functools
 import json
@@ -31,8 +33,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger("SSH_MCP_Server")
 
-# ── SSH 配置 ──────────────────────────────────────────────────
-SSH_HOST = os.getenv("SSH_HOST", "139.199.172.55")
+# ── SSH 配置（不提供默认主机：缺失时工具直接报配置错误） ──────────
+SSH_HOST = os.getenv("SSH_HOST", "")
 SSH_PORT = int(os.getenv("SSH_PORT", "22"))
 SSH_USER = os.getenv("SSH_USER", "Administrator")
 SSH_KEY_FILE = os.getenv("SSH_KEY_FILE", str(Path.home() / ".ssh" / "AgentTest.pem"))
@@ -46,7 +48,9 @@ mcp = FastMCP("SSH")
 # ── SSH 连接管理 ──────────────────────────────────────────────
 
 def _get_ssh_client() -> paramiko.SSHClient:
-    """获取 SSH 客户端连接"""
+    """获取 SSH 客户端连接；缺少 SSH_HOST 时明确报错而不是连到默认主机。"""
+    if not SSH_HOST:
+        raise RuntimeError("SSH_HOST 未配置：请在 .env 中设置远程服务器地址")
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     client.connect(
@@ -59,10 +63,53 @@ def _get_ssh_client() -> paramiko.SSHClient:
     return client
 
 
+# ── 输入校验：模型输出永远不能直接拼进 shell ──────────────────────
+_SAFE_TOKEN_RE = re.compile(r"^[\w\u4e00-\u9fa5 .:/@_-]{1,64}$", re.UNICODE)
+_ALLOWED_LOG_ROOTS = (
+    "/var/log/",
+    "/opt/logs/",
+    "C:/logs/",
+    "C:/ProgramData/logs/",
+    "C:/inetpub/logs/",
+)
+_DANGEROUS_CHARS = ("'", '"', ";", "|", "&", "$", "`", "\n", "\r", ">", "<")
+
+
+def _safe_token(value: str, field: str) -> str:
+    """白名单式校验单个搜索词/级别，拒绝 shell 元字符。"""
+    value = str(value)
+    if not _SAFE_TOKEN_RE.fullmatch(value):
+        raise ValueError(
+            f"非法参数 {field}: 仅允许字母/数字/中文/空格和 .:/@_-，长度 1-64"
+        )
+    return value
+
+
+def _safe_count(value: int, field: str, maximum: int = 1000) -> int:
+    """把数量参数限制在合理范围。"""
+    try:
+        number = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"非法参数 {field}: 必须是整数") from exc
+    if number < 1 or number > maximum:
+        raise ValueError(f"非法参数 {field}: 必须在 1-{maximum} 之间")
+    return number
+
+
+def _safe_log_path(file_path: str) -> str:
+    """规范化路径并强制落在日志根目录内，阻止路径穿越与引号注入。"""
+    normalized = os.path.normpath(str(file_path).replace("\\", "/")).replace("\\", "/")
+    if any(ch in normalized for ch in _DANGEROUS_CHARS):
+        raise ValueError("非法文件路径：包含不允许的字符")
+    if not any(normalized.startswith(root) for root in _ALLOWED_LOG_ROOTS):
+        raise ValueError(f"安全限制：仅允许读取 {', '.join(_ALLOWED_LOG_ROOTS)} 下的文件")
+    return normalized
+
+
 def _exec_readonly(commands: List[str]) -> Dict[str, str]:
     """执行只读命令集，返回命令->输出的映射。
 
-    安全约束：仅允许预定义的只读命令模式。
+    安全约束：调用方必须先通过 _safe_token/_safe_log_path 校验所有外部参数。
     """
     client = _get_ssh_client()
     results = {}
@@ -196,11 +243,19 @@ def search_system_logs(
         Dict: 日志条目列表
     """
     entries = []
+    count = _safe_count(count, "count")
+    if keyword:
+        keyword = _safe_token(keyword, "keyword")
 
     if SERVER_TYPE == "windows":
         # Windows Event Log
+        allowed_log_types = {"System", "Application", "Security"}
+        if log_type not in allowed_log_types:
+            return {"error": f"非法 log_type，仅允许: {', '.join(sorted(allowed_log_types))}"}
         level_map = {"1": "1", "2": "2", "3": "3", "4": "4",
                      "critical": "1", "error": "2", "warning": "3", "info": "4"}
+        if level is not None:
+            level = _safe_token(level, "level")
         cmd = f"wevtutil qe {log_type} /c:{count} /rd:true /f:text"
         results = _exec_readonly([cmd])
         raw = results.get(cmd, "")
@@ -238,12 +293,15 @@ def search_system_logs(
             "auth": "/var/log/auth.log",
             "kern": "/var/log/kern.log",
         }
-        log_file = log_files.get(log_type, "/var/log/syslog")
+        if log_type not in log_files:
+            return {"error": f"非法 log_type，仅允许: {', '.join(sorted(log_files))}"}
+        log_file = shlex.quote(log_files[log_type])
         cmd = f"tail -n {count} {log_file} 2>/dev/null || echo 'Log file not found'"
         if level:
-            cmd = f"grep -i '{level}' {log_file} | tail -n {count}"
+            level = _safe_token(level, "level")
+            cmd = f"grep -i {shlex.quote(level)} {log_file} | tail -n {count}"
         if keyword:
-            cmd = f"grep -i '{keyword}' {log_file} | tail -n {count}"
+            cmd = f"grep -i {shlex.quote(keyword)} {log_file} | tail -n {count}"
         results = _exec_readonly([cmd])
         raw = results.get(cmd, "")
         entries = [{"message": line} for line in raw.split('\n') if line.strip()]
@@ -296,27 +354,23 @@ def read_log_file(file_path: str, lines: int = 50) -> Dict[str, Any]:
     Returns:
         Dict: 文件内容
     """
-    # 路径白名单检查
-    allowed = [
-        "C:/logs/", "C:/ProgramData/logs/", "C:/inetpub/logs/",
-        "/var/log/", "/opt/logs/", "C:/Users/",
-    ]
-    normalized = file_path.replace("\\", "/")
-    if not any(normalized.startswith(a) for a in allowed):
-        return {
-            "error": f"安全限制：不允许读取路径 '{file_path}'。仅允许: {', '.join(allowed)}",
-            "allowed_paths": allowed,
-        }
+    try:
+        safe_path = _safe_log_path(file_path)
+    except ValueError as exc:
+        return {"error": str(exc), "allowed_paths": list(_ALLOWED_LOG_ROOTS)}
+    lines = _safe_count(lines, "lines", maximum=5000)
 
     if SERVER_TYPE == "windows":
-        cmd = f"powershell -Command \"Get-Content '{file_path}' -Tail {lines} -ErrorAction Stop\""
+        # safe_path 已拒绝引号/分号等字符，此处再做 PowerShell 单引号转义。
+        escaped = safe_path.replace("'", "''")
+        cmd = f"powershell -Command \"Get-Content '{escaped}' -Tail {lines} -ErrorAction Stop\""
     else:
-        cmd = f"tail -n {lines} {file_path}"
+        cmd = f"tail -n {lines} {shlex.quote(safe_path)}"
     results = _exec_readonly([cmd])
     content = results.get(cmd, "")
     return {
         "server_type": SERVER_TYPE,
-        "file_path": file_path,
+        "file_path": safe_path,
         "lines_requested": lines,
         "content": content,
     }

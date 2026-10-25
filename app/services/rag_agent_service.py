@@ -13,15 +13,15 @@ from langchain_core.messages import (
     RemoveMessage,
     SystemMessage,
 )
-from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph.message import REMOVE_ALL_MESSAGES, add_messages
 from loguru import logger
 from typing_extensions import TypedDict
 
 from app.config import config
+from app.core.llm_factory import create_chat_model
 from app.tools import get_current_time, retrieve_knowledge
-from app.agent.mcp_client import get_mcp_client_with_retry
+from app.agent.mcp_client import get_mcp_tools_cached
 
 
 class AgentState(TypedDict):
@@ -47,18 +47,16 @@ def trim_messages_middleware(state: AgentState) -> dict[str, Any] | None:
 
 
 class RagAgentService:
-    """RAG Agent 服务 - 使用 LangGraph + ChatOpenAI (兼容 DeepSeek 等)"""
+    """RAG Agent 服务 - 使用 LangGraph + 可切换的 LLM 后端"""
 
     def __init__(self, streaming: bool = True):
         self.model_name = config.llm_model
         self.streaming = streaming
         self.system_prompt = self._build_system_prompt()
 
-        # 使用 OpenAI 兼容模式，通过 .env 配置切换提供商
-        self.model = ChatOpenAI(
+        # 统一走工厂：provider（anthropic / openai）由 .env 决定
+        self.model = create_chat_model(
             model=self.model_name,
-            api_key=config.llm_api_key,
-            base_url=config.llm_base_url,
             temperature=0.7,
             streaming=streaming,
         )
@@ -88,8 +86,7 @@ class RagAgentService:
 
         # 尝试加载 MCP 工具（MCP 服务不可用时自动跳过）
         try:
-            mcp_client = await get_mcp_client_with_retry()
-            mcp_tools = await mcp_client.get_tools()
+            mcp_tools = await get_mcp_tools_cached()
             logger.info(f"成功加载 {len(mcp_tools)} 个 MCP 工具")
             self.mcp_tools = mcp_tools
         except Exception as e:

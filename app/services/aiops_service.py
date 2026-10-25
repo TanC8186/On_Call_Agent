@@ -3,18 +3,22 @@
 编排 LangGraph 状态图：编译工作流、流式执行、事件格式化
 """
 
+import time
+import uuid
 from typing import AsyncGenerator, Dict, Any
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 from loguru import logger
 
-from app.agent.aiops import PlanExecuteState, planner, executor, replanner
+from app.agent.aiops import PlanExecuteState, planner, executor, replanner, verifier
+from app.observability import trace_event
 
 
 # 节点名称常量
 NODE_PLANNER = "planner"
 NODE_EXECUTOR = "executor"
 NODE_REPLANNER = "replanner"
+NODE_VERIFIER = "verifier"
 
 
 class AIOpsService:
@@ -36,14 +40,16 @@ class AIOpsService:
         # 添加节点
         workflow.add_node(NODE_PLANNER, planner)      # 制定计划
         workflow.add_node(NODE_EXECUTOR, executor)  # 执行步骤
-        workflow.add_node(NODE_REPLANNER, replanner)  # 重新规划
+        workflow.add_node(NODE_VERIFIER, verifier)  # 校验证据
+        workflow.add_node(NODE_REPLANNER, replanner)  # 评估 / replan
 
         # 设置入口点
         workflow.set_entry_point(NODE_PLANNER)
 
         # 定义边
         workflow.add_edge(NODE_PLANNER, NODE_EXECUTOR)     # planner -> executor
-        workflow.add_edge(NODE_EXECUTOR, NODE_REPLANNER)   # executor -> replanner
+        workflow.add_edge(NODE_EXECUTOR, NODE_VERIFIER)    # executor -> verifier
+        workflow.add_edge(NODE_VERIFIER, NODE_REPLANNER)   # verifier -> replanner
 
         # replanner 的条件边
         def should_continue(state: PlanExecuteState) -> str:
@@ -95,12 +101,25 @@ class AIOpsService:
         """
         logger.info(f"[会话 {session_id}] 开始执行任务: {user_input}")
 
+        run_id = uuid.uuid4().hex
+        started_at = time.monotonic()
+        trace_event(
+            run_id, "run_start", session_id=session_id, input_chars=len(user_input)
+        )
+        logger.info(f"[run {run_id}] 会话 {session_id} 开始执行")
+
         try:
-            # 初始化状态
+
+            # 初始化状态：past_steps 是普通 channel，传空列表会覆盖上一次 run 的值
             initial_state: PlanExecuteState = {
+                "run_id": run_id,
                 "input": user_input,
                 "plan": [],
                 "past_steps": [],
+                "needs_replan": False,
+                "replan_count": 0,
+                "severity": "",
+                "category": "",
                 "response": ""
             }
 
@@ -118,6 +137,14 @@ class AIOpsService:
             ):
                 # 解析事件
                 for node_name, node_output in event.items():
+                    trace_event(
+                        run_id,
+                        "node",
+                        node=node_name,
+                        output_keys=sorted(node_output.keys())
+                        if isinstance(node_output, dict)
+                        else None,
+                    )
                     logger.info(f"节点 '{node_name}' 输出事件")
 
                     # 根据节点类型生成不同的事件
@@ -126,6 +153,15 @@ class AIOpsService:
 
                     elif node_name == NODE_EXECUTOR:
                         yield self._format_executor_event(node_output)
+
+                    elif node_name == NODE_VERIFIER:
+                        yield {
+                            "type": "status",
+                            "stage": "verifier",
+                            "message": "上一步未产生可用证据，准备 replan"
+                            if (node_output or {}).get("needs_replan")
+                            else "证据校验通过",
+                        }
 
                     elif node_name == NODE_REPLANNER:
                         yield self._format_replanner_event(node_output)
@@ -138,21 +174,37 @@ class AIOpsService:
             if final_state and final_state.values:
                 final_response = final_state.values.get("response", "")
 
+            trace_event(
+                run_id,
+                "run_complete",
+                response_chars=len(final_response or ""),
+                duration_ms=round((time.monotonic() - started_at) * 1000),
+            )
+
             # 发送完成事件
             yield {
                 "type": "complete",
                 "stage": "complete",
                 "message": "任务执行完成",
+                "run_id": run_id,
                 "response": final_response
             }
 
             logger.info(f"[会话 {session_id}] 任务执行完成")
 
         except Exception as e:
+            trace_event(
+                run_id,
+                "run_error",
+                error=type(e).__name__,
+                message=str(e)[:500],
+                duration_ms=round((time.monotonic() - started_at) * 1000),
+            )
             logger.error(f"[会话 {session_id}] 任务执行失败: {e}", exc_info=True)
             yield {
                 "type": "error",
                 "stage": "error",
+                "run_id": run_id,
                 "message": f"任务执行出错: {str(e)}"
             }
 
@@ -271,12 +323,17 @@ class AIOpsService:
             }
 
         plan = state.get("plan", [])
+        plan_text = [
+            item.get("description", str(item)) if isinstance(item, dict) else str(item)
+            for item in plan
+        ]
 
         return {
             "type": "plan",
             "stage": "plan_created",
             "message": f"执行计划已制定，共 {len(plan)} 个步骤",
-            "plan": plan
+            "plan": plan_text,
+            "plan_steps": plan,
         }
 
     def _format_executor_event(self, state: Dict | None) -> Dict:

@@ -26,18 +26,28 @@ class Settings(BaseSettings):
     app_name: str = "OnCallAgent"
     app_version: str = "1.0.0"
     debug: bool = False
-    host: str = "0.0.0.0"
+    host: str = "127.0.0.1"
     port: int = 9900
 
-    # ====== LLM 通用配置（支持 DeepSeek / DashScope / OpenAI 等） ======
+    # ====== LLM 配置 ======
+    # provider: anthropic（默认，走 Messages API）| openai（任意 OpenAI 兼容端点）
+    llm_provider: str = "anthropic"
     llm_api_key: str = ""
-    llm_base_url: str = "https://api.deepseek.com"
-    llm_model: str = "deepseek-chat"
+    # anthropic provider 下这是 API 根地址，SDK 会自己拼 /v1/messages
+    llm_base_url: str = "https://www.autodl.art/api/v1/anthropic"
+    llm_model: str = "claude-sonnet-4-6"
+    llm_max_tokens: int = 4096
+
+    # 本地小模型（vLLM / llama.cpp / Ollama 的 OpenAI 兼容接口）
+    local_llm_base_url: str = ""
+    local_llm_model: str = "qwen-ops"
+    # 训练时工具目录是否带参数签名；必须与训练数据一致
+    local_llm_with_params: bool = False
 
     # Embedding 配置
-    embedding_provider: str = "dashscope"  # dashscope | openai | local
+    embedding_provider: str = "local"  # local | dashscope | openai
     embedding_api_key: str = ""
-    embedding_model: str = "text-embedding-v4"
+    embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     embedding_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
     # 向后兼容旧字段名 (DASHSCOPE_* 环境变量仍可用)
@@ -70,8 +80,9 @@ class Settings(BaseSettings):
     rag_top_k: int = 3
 
     # 文档分块配置
-    chunk_max_size: int = 800
-    chunk_overlap: int = 100
+    # 本地 embedding 模型 max_seq_length=128 tokens；实测 180 字符以内不会截断
+    chunk_max_size: int = 180
+    chunk_overlap: int = 40
 
     # 腾讯云 API 凭证
     tencentcloud_appid: str = ""

@@ -8,7 +8,7 @@ from loguru import logger
 
 from app.config import config
 from app.core.milvus_client import milvus_manager
-from app.services.vector_embedding_service import vector_embedding_service
+from app.services.vector_embedding_service import get_embedding_service
 
 
 # 统一使用 biz collection
@@ -41,7 +41,7 @@ class VectorStoreManager:
             }
 
             self.vector_store = Milvus(
-                embedding_function=vector_embedding_service,
+                embedding_function=get_embedding_service(),
                 collection_name=self.collection_name,
                 connection_args=connection_args,
                 auto_id=False,

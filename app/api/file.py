@@ -109,10 +109,19 @@ async def index_directory(directory_path: str = None):
         JSONResponse: 索引结果
     """
     try:
-        logger.info(f"开始索引目录: {directory_path or 'uploads'}")
+        # 只允许索引服务自己的知识库目录，避免任意路径读取
+        allowed_roots = [UPLOAD_DIR.resolve(), Path("./aiops-docs").resolve()]
+        target = Path(directory_path).resolve() if directory_path else allowed_roots[0]
+        if not any(target == root or root in target.parents for root in allowed_roots):
+            raise HTTPException(
+                status_code=400,
+                detail=f"只允许索引以下目录: {', '.join(str(r) for r in allowed_roots)}",
+            )
+
+        logger.info(f"开始索引目录: {target}")
 
         # 执行索引
-        result = vector_index_service.index_directory(directory_path)
+        result = vector_index_service.index_directory(str(target))
 
         return JSONResponse(
             status_code=200,

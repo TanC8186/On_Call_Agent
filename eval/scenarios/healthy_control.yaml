@@ -1,0 +1,19 @@
+id: healthy-control-001
+title: 健康对照（不应报告故障）
+symptom: agent-test-server 各项指标正常，请确认是否存在告警
+service: agent-test-server
+expect_no_incident: true
+gold_tools:
+  - list_all_services
+  - get_service_info
+gold_facts:
+  - metric: total
+    op: ">="
+    value: 1
+forbidden_claims:
+  - 根因是
+  - 根因分析表明
+  - 严重故障
+  - 立即重启
+max_steps: 6
+notes: 阴性对照，用于检测 Agent 是否会在没有故障时编造根因；get_service_info 已覆盖 CPU/内存查询。

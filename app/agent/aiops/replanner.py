@@ -8,12 +8,13 @@ import re
 from textwrap import dedent
 from typing import Dict, Any, List
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
 from loguru import logger
 
-from app.config import config
+from app.core.llm_factory import create_chat_model
+from app.observability import trace_event
 from app.tools import get_current_time, retrieve_knowledge
-from app.agent.mcp_client import get_mcp_client_with_retry
+from app.agent.mcp_client import get_mcp_tools_cached
+from .plan_schema import normalize_plan
 from .state import PlanExecuteState
 from .utils import format_tools_description
 
@@ -44,32 +45,31 @@ def _parse_json_from_text(text: str) -> Dict[str, Any]:
 
 
 REPLANNER_SYSTEM_TEMPLATE = dedent("""
-    作为一个重新规划专家，你需要根据已执行的步骤决定下一步行动。
+    作为一个评估专家，你需要根据已执行的步骤决定下一步行动。
 
-    可用工具列表（用于制定计划时参考）：
+    可用工具列表（用于制定或调整计划）：
 
     {tools_description}
 
-    注意：你的职责是制定或调整计划，实际的工具调用由 Executor 负责执行。
+    {replan_hint}
 
-    你只有两个选择：
+    你有三个选择：
 
     **1. 'continue' - 继续执行剩余计划** 【默认选择】
-       - 只要剩余步骤中包含任何工具调用（query_*, search_*, get_*, list_*），就必须 continue
-       - 不要提前判断"信息够了"，让 Executor 把工具都调完
+       - 剩余步骤中还有工具调用时，优先 continue
 
-    **2. 'respond' - 生成最终响应** 【仅当以下条件全部满足】
-       - 剩余步骤数为 0（所有计划步骤已全部执行完毕）
-       - 或者已执行步骤 >= 10（强制终止）
-       - 或者剩余步骤全部是"综合"、"总结"、"生成报告"等不涉及工具调用的步骤
+    **2. 'respond' - 生成最终响应** 【仅当】
+       - 剩余步骤数为 0，或剩余步骤全部是"综合/总结/生成报告"这类 reason 步骤
 
-    关键规则：
-    - 如果剩余步骤中还有 query_ / search_ / get_ / list_ 开头的工具调用 → 必须 continue
-    - **禁止 replan**，原计划由 Planner 制定，你只负责按计划执行到底
+    **3. 'replan' - 重写剩余计划** 【仅当上一步失败/没有拿到证据，且预算未用完】
+       - updated_steps 必须是完整的 PlanStep 列表（kind/tool/args/description/success_criteria）
+       - 只重写"剩余步骤"，不要重复已经成功的步骤
+       - 必须针对失败原因（例如时间窗为空 → 放宽时间窗；工具不存在 → 换用真实工具名）
 
     你必须以严格的 JSON 格式输出：
-    - 如果选择 respond: {"action": "respond", "new_steps": []}
-    - 如果选择 continue: {"action": "continue", "new_steps": []}
+    - respond: {"action": "respond", "updated_steps": [], "reason": "..."}
+    - continue: {"action": "continue", "updated_steps": [], "reason": "..."}
+    - replan: {"action": "replan", "updated_steps": [...], "reason": "...", "evidence_gap": "..."}
 
     只输出 JSON，不要包含其他解释文字。
 """).strip()
@@ -80,11 +80,13 @@ RESPONSE_SYSTEM_TEMPLATE = dedent("""
     响应要求：
     - 清晰、结构化，使用 Markdown 格式
     - **必须使用执行历史中的实际数值和指标数据**，不得编造
-    - 如果执行结果中 source 字段为 "tencent_cloud"，说明数据来自真实腾讯云 API
-    - 如果执行结果中 source 字段为 "local_estimate"，说明数据来自本地估算
-    - 如果执行结果中 source 字段为 "unsupported"，说明该指标当前服务器类型不支持
+    - source 字段含义：
+      - "tencent_cloud" / "tencent_cloud_custom"：真实腾讯云 API 数据
+      - "demo"：合成演示数据，**不得据此下根因结论**，必须在报告中标注"演示数据"
+      - "unavailable"：没有拿到数据；报告中写"未获取"，不得猜测数值
+      - "unsupported"：当前服务器类型不支持该指标
     - 如果某个步骤失败或未执行，在报告中明确标注该指标为"未获取"而非编造数据
-    - **如果某指标 source 为 local_estimate，说明该指标为本地估算值**
+    - 如果任一关键指标 source 为 "demo" 或 "unavailable"，报告中不得给出确定性根因结论
 
     你必须以 JSON 格式输出：
     {"response": "你的 Markdown 格式完整响应"}
@@ -93,14 +95,9 @@ RESPONSE_SYSTEM_TEMPLATE = dedent("""
 """).strip()
 
 
-def _create_llm(temperature: float = 0) -> ChatOpenAI:
-    """创建 LLM 实例（OpenAI 兼容模式，支持 DeepSeek 等）"""
-    return ChatOpenAI(
-        model=config.llm_model,
-        api_key=config.llm_api_key,
-        base_url=config.llm_base_url,
-        temperature=temperature,
-    )
+def _create_llm(temperature: float = 0):
+    """统一从工厂取模型，provider 由 .env 决定。"""
+    return create_chat_model(temperature=temperature, streaming=False)
 
 
 async def replanner(state: PlanExecuteState) -> Dict[str, Any]:
@@ -117,6 +114,13 @@ async def replanner(state: PlanExecuteState) -> Dict[str, Any]:
     input_text = state.get("input", "")
     plan = state.get("plan", [])
     past_steps = state.get("past_steps", [])
+    needs_replan = bool(state.get("needs_replan", False))
+    replan_count = int(state.get("replan_count", 0) or 0)
+    replan_hint = (
+        f"上一步没有产生可用证据，允许 replan（已用 {replan_count}/2 次预算）。"
+        if needs_replan and replan_count < 2
+        else "上一步正常；本轮禁止 replan，只能 continue 或 respond。"
+    )
 
     logger.info(f"剩余计划步骤: {len(plan)}")
     logger.info(f"已执行步骤: {len(past_steps)}")
@@ -132,8 +136,7 @@ async def replanner(state: PlanExecuteState) -> Dict[str, Any]:
     try:
         local_tools = [get_current_time, retrieve_knowledge]
 
-        mcp_client = await get_mcp_client_with_retry()
-        mcp_tools = await mcp_client.get_tools()
+        mcp_tools = await get_mcp_tools_cached()
 
         all_tools = local_tools + mcp_tools
         logger.info(f"可用工具数量: 本地 {len(local_tools)} + MCP {len(mcp_tools)}")
@@ -146,31 +149,33 @@ async def replanner(state: PlanExecuteState) -> Dict[str, Any]:
     # 创建 LLM
     llm = _create_llm(temperature=0)
 
-    # 格式化已执行的步骤
+    # 格式化已执行的步骤。保留足够的工具原始输出（含 source 字段），
+    # 500 字符会把一次真实指标查询的 provenance 截掉。
     steps_summary = "\n".join([
-        f"步骤: {step}\n结果: {result[:500]}..."
+        f"步骤: {step}\n结果: {result[:4000]}{'...' if len(result) > 4000 else ''}"
         for step, result in past_steps
     ])
 
     # 如果还有剩余计划，进行决策
-    if plan:
-        logger.info("还有剩余计划，评估下一步行动")
+    if plan or needs_replan:
+        logger.info("还有剩余计划或需要补救，评估下一步行动")
 
         try:
-            # 缩短输入避免超长 prompt
-            short_input = input_text[:500] + "..." if len(input_text) > 500 else input_text
-
+            remaining_text = "; ".join(
+                step.get("description", str(step)) if isinstance(step, dict) else str(step)
+                for step in plan
+            )
             response = await llm.ainvoke([
                 ("system", REPLANNER_SYSTEM_TEMPLATE.replace(
                     "{tools_description}", tools_description,
-                )),
+                ).replace("{replan_hint}", replan_hint)),
                 ("user", dedent(f"""
-                    原始任务: {short_input}
+                    原始任务: {input_text}
 
                     已执行的步骤:
                     {steps_summary}
 
-                    剩余计划: {', '.join(plan)}
+                    剩余计划: {remaining_text}
 
                     重要提示：已执行 {len(past_steps)} 个步骤，请优先考虑是否信息已足够生成响应（respond）
                 """).strip()),
@@ -181,7 +186,18 @@ async def replanner(state: PlanExecuteState) -> Dict[str, Any]:
 
             act = _parse_json_from_text(response_text)
             action = act.get("action", "continue")
-            new_steps = act.get("new_steps", [])
+            new_steps = act.get("updated_steps", []) or act.get("new_steps", [])
+
+            usage = getattr(response, "usage_metadata", None) or {}
+            trace_event(
+                state.get("run_id", ""),
+                "decision",
+                action=action,
+                remaining_steps=len(plan),
+                executed_steps=len(past_steps),
+                input_tokens=usage.get("input_tokens"),
+                output_tokens=usage.get("output_tokens"),
+            )
 
             logger.info(f"Replanner 决策: {action}")
 
@@ -190,9 +206,29 @@ async def replanner(state: PlanExecuteState) -> Dict[str, Any]:
                 return await _generate_response(state, llm)
 
             elif action == "replan":
-                # replan 已禁用 — LLM 可能仍输出，强制改为 continue
-                logger.warning("LLM 输出 replan，但 replan 已禁用，强制改为 continue")
-                return {}
+                normalized = normalize_plan(new_steps)
+                if not needs_replan or replan_count >= 2 or not normalized:
+                    logger.warning(
+                        "Replanner 请求 replan，但预算/条件不满足，降级为 continue"
+                    )
+                    return {}
+                logger.warning(
+                    f"Replanner 重写剩余计划（第 {replan_count + 1}/2 次）: "
+                    f"{act.get('reason', '')}"
+                )
+                trace_event(
+                    state.get("run_id", ""),
+                    "replan",
+                    reason=act.get("reason", ""),
+                    evidence_gap=act.get("evidence_gap", ""),
+                    steps=normalized,
+                    replan_count=replan_count + 1,
+                )
+                return {
+                    "plan": normalized,
+                    "needs_replan": False,
+                    "replan_count": replan_count + 1,
+                }
 
             else:  # action == "continue"
                 logger.info("决定继续执行当前计划")
@@ -208,26 +244,24 @@ async def replanner(state: PlanExecuteState) -> Dict[str, Any]:
         return await _generate_response(state, llm)
 
 
-async def _generate_response(state: PlanExecuteState, llm: ChatOpenAI) -> Dict[str, Any]:
+async def _generate_response(state: PlanExecuteState, llm) -> Dict[str, Any]:
     """生成最终响应"""
     logger.info("生成最终响应...")
 
     input_text = state.get("input", "")
     past_steps = state.get("past_steps", [])
 
-    # 格式化执行历史
+    # 格式化执行历史：保留完整工具输出，避免把 source/provenance 截掉。
     execution_history = "\n\n".join([
-        f"### 步骤: {step}\n**结果:**\n{result[:800]}"
+        f"### 步骤: {step}\n**结果:**\n{result}"
         for step, result in past_steps
     ])
 
     try:
-        short_input = input_text[:500] + "..." if len(input_text) > 500 else input_text
-
         response = await llm.ainvoke([
             ("system", RESPONSE_SYSTEM_TEMPLATE),
             ("user", dedent(f"""
-                原始任务: {short_input}
+                原始任务: {input_text}
 
                 执行历史:
                 {execution_history}
@@ -247,6 +281,15 @@ async def _generate_response(state: PlanExecuteState, llm: ChatOpenAI) -> Dict[s
             logger.warning("无法从 JSON 中解析 response 字段，使用原始输出")
             final_response = response_text
 
+        usage = getattr(response, "usage_metadata", None) or {}
+        trace_event(
+            state.get("run_id", ""),
+            "final_response",
+            response_chars=len(final_response),
+            result_preview=final_response,
+            input_tokens=usage.get("input_tokens"),
+            output_tokens=usage.get("output_tokens"),
+        )
         logger.info(f"最终响应生成完成，长度: {len(final_response)}")
         return {"response": final_response}
 

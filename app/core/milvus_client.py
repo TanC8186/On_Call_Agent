@@ -111,14 +111,13 @@ class MilvusClientManager:
                 if vector_field and hasattr(vector_field, 'params') and 'dim' in vector_field.params:
                     existing_dim = vector_field.params['dim']
                     if existing_dim != self.VECTOR_DIM:
-                        logger.warning(
-                            f"检测到向量维度不匹配！当前 collection 维度: {existing_dim}, 配置维度: {self.VECTOR_DIM}"
+                        # 绝不自动 drop：换 embedding 模型不应该静默清空知识库。
+                        raise RuntimeError(
+                            f"向量维度不匹配：collection '{self.COLLECTION_NAME}' 是 {existing_dim} 维，"
+                            f"当前配置是 {self.VECTOR_DIM} 维。请显式迁移："
+                            f"1) 备份并删除旧 collection；2) 用新维度重建并重新索引；"
+                            f"或 3) 在 MILVUS_COLLECTION 中使用新的 collection 名称。"
                         )
-                        logger.info(f"正在删除旧 collection '{self.COLLECTION_NAME}'...")
-                        _ = utility.drop_collection(self.COLLECTION_NAME)
-                        logger.info(f"正在重新创建 collection '{self.COLLECTION_NAME}'...")
-                        self._create_collection()
-                        logger.info(f"成功重新创建 collection，维度: {self.VECTOR_DIM}")
                     else:
                         logger.info(f"向量维度匹配: {self.VECTOR_DIM}")
 

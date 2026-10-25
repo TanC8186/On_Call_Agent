@@ -1,0 +1,89 @@
+{
+  "$defs": {
+    "PlanStep": {
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "default": "tool",
+          "enum": [
+            "tool",
+            "reason"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "tool": {
+          "default": "",
+          "title": "Tool",
+          "type": "string"
+        },
+        "args": {
+          "additionalProperties": true,
+          "title": "Args",
+          "type": "object"
+        },
+        "description": {
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "success_criteria": {
+          "default": "",
+          "title": "Success Criteria",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "description"
+      ],
+      "title": "PlanStep",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "severity": {
+      "enum": [
+        "P1",
+        "P2",
+        "P3",
+        "P4"
+      ],
+      "title": "Severity",
+      "type": "string"
+    },
+    "category": {
+      "enum": [
+        "cpu",
+        "memory",
+        "disk",
+        "network",
+        "service",
+        "healthy",
+        "unknown"
+      ],
+      "title": "Category",
+      "type": "string"
+    },
+    "plan": {
+      "items": {
+        "$ref": "#/$defs/PlanStep"
+      },
+      "maxItems": 8,
+      "minItems": 2,
+      "title": "Plan",
+      "type": "array"
+    }
+  },
+  "required": [
+    "severity",
+    "category",
+    "plan"
+  ],
+  "title": "TriageOutput",
+  "type": "object"
+}

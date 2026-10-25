@@ -20,7 +20,7 @@
 **目的**: 记录告警时间，用于日志查询
 
 ### 步骤2: 查询系统磁盘使用情况
-**工具**: `query_logs`
+**工具**: `search_log`
 **参数要求**:
 - **地域**: `ap-guangzhou`
 - **日志主题**: `system-metrics`
@@ -36,7 +36,7 @@
 ```
 
 ### 步骤3: 查询应用日志
-**工具**: `query_logs`
+**工具**: `search_log`
 **参数要求**:
 - **地域**: `ap-guangzhou`
 - **日志主题**: `application-logs`

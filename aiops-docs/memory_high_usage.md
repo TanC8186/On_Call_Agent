@@ -19,7 +19,7 @@
 **目的**: 确定告警发生的时间范围
 
 ### 步骤2: 查询系统监控日志
-**工具**: `query_logs`
+**工具**: `search_log`
 **参数要求**:
 - **地域**: `ap-guangzhou`
 - **日志主题**: `system-metrics`
@@ -35,7 +35,7 @@
 ```
 
 ### 步骤3: 查询应用日志
-**工具**: `query_logs`
+**工具**: `search_log`
 **参数要求**:
 - **地域**: `ap-guangzhou`
 - **日志主题**: `application-logs`

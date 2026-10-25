@@ -35,12 +35,15 @@ SECRET_ID = os.getenv("TENCENTCLOUD_SECRET_ID", "")
 SECRET_KEY = os.getenv("TENCENTCLOUD_SECRET_KEY", "")
 DEFAULT_REGION = os.getenv("TENCENTCLOUD_REGION", "ap-beijing")
 USE_REAL_API = bool(SECRET_ID and SECRET_KEY)
+DEMO_MODE = os.getenv("DEMO_MODE", "0").lower() in ("1", "true", "yes")
 
 if USE_REAL_API:
     _cred = credential.Credential(SECRET_ID, SECRET_KEY)
     logger.info(f"✅ CLS Server: 已加载真实腾讯云凭证，默认区域={DEFAULT_REGION}")
+elif DEMO_MODE:
+    logger.warning("⚠️  CLS Server: 未配置腾讯云凭证，DEMO_MODE=1，将返回合成演示数据（source=demo）")
 else:
-    logger.warning("⚠️  CLS Server: 未配置腾讯云凭证，部分工具将返回本地估算数据")
+    logger.error("❌ CLS Server: 未配置腾讯云凭证且 DEMO_MODE=0，日志工具将返回 unavailable")
 
 mcp = FastMCP("CLS")
 
@@ -160,7 +163,7 @@ def get_topic_info_by_name(
 ) -> Dict[str, Any]:
     """根据主题名称搜索相关的日志主题信息。
 
-    优先使用真实腾讯云 CLS API；未配置凭证时回退到本地估算数据。
+    优先使用真实腾讯云 CLS API；未配置凭证时只有 DEMO_MODE=1 才返回演示数据。
 
     Args:
         topic_name: 主题名称（支持模糊搜索）
@@ -172,8 +175,16 @@ def get_topic_info_by_name(
     region = region_code or DEFAULT_REGION
 
     if not USE_REAL_API:
-        # ── 本地估算数据回退 ──
-        local_estimate_topics = [
+        if not DEMO_MODE:
+            return {
+                "ok": False,
+                "source": "unavailable",
+                "topic_id": None,
+                "topic_name": topic_name,
+                "error": "未配置腾讯云凭证且未开启 DEMO_MODE，无法查询日志主题",
+            }
+        # ── 合成演示数据（仅 DEMO_MODE=1） ──
+        demo_topics = [
             {
                 "topic_id": "topic-001",
                 "topic_name": "数据同步服务日志",
@@ -181,13 +192,14 @@ def get_topic_info_by_name(
                 "region_code": "ap-beijing",
                 "create_time": "2024-01-01 10:00:00",
                 "log_count": 0,
-                "description": "服务应用日志"
+                "description": "服务应用日志",
+                "source": "demo",
             }
         ]
-        for t in local_estimate_topics:
+        for t in demo_topics:
             if topic_name in t["topic_name"]:
                 return t
-        return {"topic_id": None, "topic_name": topic_name, "error": f"未找到主题: {topic_name}"}
+        return {"ok": False, "source": "demo", "topic_id": None, "topic_name": topic_name, "error": f"未找到主题: {topic_name}"}
 
     # ── 真实 API ──
     try:
@@ -237,8 +249,17 @@ def search_topic_by_service_name(
     region = region_code or DEFAULT_REGION
 
     if not USE_REAL_API:
-        # ── 本地估算数据回退 ──
-        local_estimate_topics = [
+        if not DEMO_MODE:
+            return {
+                "ok": False,
+                "source": "unavailable",
+                "total": 0,
+                "topics": [],
+                "query": {"service_name": service_name, "region_code": region_code, "fuzzy": fuzzy},
+                "message": "未配置腾讯云凭证且未开启 DEMO_MODE，无法查询日志主题",
+            }
+        # ── 合成演示数据（仅 DEMO_MODE=1） ──
+        demo_topics = [
             {
                 "topic_id": "topic-001",
                 "topic_name": "数据同步服务日志",
@@ -246,7 +267,8 @@ def search_topic_by_service_name(
                 "region_code": "ap-beijing",
                 "create_time": "2024-01-01 10:00:00",
                 "log_count": 0,
-                "description": "数据同步服务的应用日志"
+                "description": "数据同步服务的应用日志",
+                "source": "demo",
             },
             {
                 "topic_id": "topic-002",
@@ -255,7 +277,8 @@ def search_topic_by_service_name(
                 "region_code": "ap-beijing",
                 "create_time": "2024-01-01 10:00:00",
                 "log_count": 0,
-                "description": "数据同步服务的错误日志"
+                "description": "数据同步服务的错误日志",
+                "source": "demo",
             },
             {
                 "topic_id": "topic-003",
@@ -264,11 +287,12 @@ def search_topic_by_service_name(
                 "region_code": "ap-shanghai",
                 "create_time": "2024-01-01 10:00:00",
                 "log_count": 0,
-                "description": "API网关服务日志"
+                "description": "API网关服务日志",
+                "source": "demo",
             }
         ]
         matched = []
-        for t in local_estimate_topics:
+        for t in demo_topics:
             if region_code and t["region_code"] != region_code:
                 continue
             sn = t.get("service_name", "")
@@ -347,7 +371,7 @@ def search_log(
 ) -> Dict[str, Any]:
     """基于提供的查询参数搜索日志。
 
-    优先使用真实腾讯云 CLS SearchLog API；未配置凭证时回退到本地估算数据。
+    优先使用真实腾讯云 CLS SearchLog API；未配置凭证时只有 DEMO_MODE=1 才返回演示数据。
 
     Args:
         topic_id: 主题ID（必填）
@@ -364,7 +388,16 @@ def search_log(
     region = region_code or DEFAULT_REGION
 
     if not USE_REAL_API:
-        # ── 本地估算数据回退 ──
+        if not DEMO_MODE:
+            return {
+                "ok": False,
+                "source": "unavailable",
+                "topic_id": topic_id,
+                "total": 0,
+                "logs": [],
+                "error": "未配置腾讯云凭证且未开启 DEMO_MODE，无法查询日志",
+            }
+        # ── 合成演示数据（仅 DEMO_MODE=1） ──
         if topic_id == "topic-001":
             logs = []
             current_time_ms = start_time
@@ -382,6 +415,9 @@ def search_log(
                 count += 1
                 current_time_ms += 60 * 1000
             return {
+                "ok": True,
+                "source": "demo",
+                "demo_mode": True,
                 "topic_id": topic_id,
                 "start_time": start_time,
                 "end_time": end_time,
@@ -390,10 +426,12 @@ def search_log(
                 "total": len(logs),
                 "logs": logs,
                 "took_ms": 50,
-                "message": f"成功查询 {len(logs)} 条应用日志（本地估算数据）"
+                "message": f"成功查询 {len(logs)} 条演示日志（非真实日志）"
             }
         else:
             return {
+                "ok": False,
+                "source": "demo",
                 "topic_id": topic_id,
                 "start_time": start_time,
                 "end_time": end_time,

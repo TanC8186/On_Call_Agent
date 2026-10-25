@@ -21,7 +21,8 @@ NC = \033[0m
         install install-dev dev run test test-quick format lint fix type-check \
         security pre-commit-install pre-commit check-all coverage docs shell \
         ipython watch add add-dev remove list-docs test-upload sync logs \
-        start-cls stop-cls start-monitor stop-monitor start-api stop-api status-mcp
+        start-cls stop-cls start-monitor stop-monitor start-api stop-api status-mcp \
+        eval eval-validate web
 
 # ============================================================
 # 默认目标：显示帮助信息
@@ -192,14 +193,14 @@ status:
 # 启动 CLS MCP 服务
 start-cls:
 	@echo "$(YELLOW)📋 启动 CLS MCP 服务...$(NC)"
-	@if pgrep -f "mcp_servers/cls_server.py" > /dev/null 2>&1; then \
+	@if pgrep -f "servers/cls_server.py" > /dev/null 2>&1; then \
 		echo "$(GREEN)✅ CLS MCP 服务已经在运行中$(NC)"; \
 	else \
 		echo "$(YELLOW)📦 正在启动 CLS MCP 服务（后台运行）...$(NC)"; \
-		nohup .venv/bin/python mcp_servers/cls_server.py > mcp_cls.log 2>&1 & \
+		nohup .venv/bin/python servers/cls_server.py > mcp_cls.log 2>&1 & \
 		echo $$! > mcp_cls.pid; \
 		sleep 2; \
-		if pgrep -f "mcp_servers/cls_server.py" > /dev/null 2>&1; then \
+		if pgrep -f "servers/cls_server.py" > /dev/null 2>&1; then \
 			echo "$(GREEN)✅ CLS MCP 服务启动成功$(NC)"; \
 			echo "$(YELLOW)   PID: $$(cat mcp_cls.pid)$(NC)"; \
 			echo "$(YELLOW)   URL: http://127.0.0.1:8003/mcp$(NC)"; \
@@ -213,14 +214,14 @@ start-cls:
 # 启动 Monitor MCP 服务
 start-monitor:
 	@echo "$(YELLOW)📊 启动 Monitor MCP 服务...$(NC)"
-	@if pgrep -f "mcp_servers/monitor_server.py" > /dev/null 2>&1; then \
+	@if pgrep -f "servers/monitor_server.py" > /dev/null 2>&1; then \
 		echo "$(GREEN)✅ Monitor MCP 服务已经在运行中$(NC)"; \
 	else \
 		echo "$(YELLOW)📦 正在启动 Monitor MCP 服务（后台运行）...$(NC)"; \
-		nohup .venv/bin/python mcp_servers/monitor_server.py > mcp_monitor.log 2>&1 & \
+		nohup .venv/bin/python servers/monitor_server.py > mcp_monitor.log 2>&1 & \
 		echo $$! > mcp_monitor.pid; \
 		sleep 2; \
-		if pgrep -f "mcp_servers/monitor_server.py" > /dev/null 2>&1; then \
+		if pgrep -f "servers/monitor_server.py" > /dev/null 2>&1; then \
 			echo "$(GREEN)✅ Monitor MCP 服务启动成功$(NC)"; \
 			echo "$(YELLOW)   PID: $$(cat mcp_monitor.pid)$(NC)"; \
 			echo "$(YELLOW)   URL: http://127.0.0.1:8004/mcp$(NC)"; \
@@ -245,7 +246,7 @@ stop-monitor:
 		rm -f mcp_monitor.pid; \
 	else \
 		echo "$(YELLOW)⚠️  未找到 mcp_monitor.pid 文件$(NC)"; \
-		pkill -f "mcp_servers/monitor_server.py" 2>/dev/null && \
+		pkill -f "servers/monitor_server.py" 2>/dev/null && \
 			echo "$(GREEN)✅ 已停止所有 Monitor MCP 进程$(NC)" || \
 			echo "$(YELLOW)⚠️  没有运行中的 Monitor MCP 进程$(NC)"; \
 	fi
@@ -255,8 +256,8 @@ status-mcp:
 	@echo "$(YELLOW)📊 MCP 服务状态:$(NC)"
 	@echo ""
 	@echo "$(CYAN)CLS MCP 服务:$(NC)"
-	@if pgrep -f "mcp_servers/cls_server.py" > /dev/null 2>&1; then \
-		pid=$$(pgrep -f "mcp_servers/cls_server.py"); \
+	@if pgrep -f "servers/cls_server.py" > /dev/null 2>&1; then \
+		pid=$$(pgrep -f "servers/cls_server.py"); \
 		echo "  状态: $(GREEN)运行中$(NC)"; \
 		echo "  PID: $$pid"; \
 		echo "  URL: http://127.0.0.1:8003/mcp"; \
@@ -268,8 +269,8 @@ status-mcp:
 	fi
 	@echo ""
 	@echo "$(CYAN)Monitor MCP 服务:$(NC)"
-	@if pgrep -f "mcp_servers/monitor_server.py" > /dev/null 2>&1; then \
-		pid=$$(pgrep -f "mcp_servers/monitor_server.py"); \
+	@if pgrep -f "servers/monitor_server.py" > /dev/null 2>&1; then \
+		pid=$$(pgrep -f "servers/monitor_server.py"); \
 		echo "  状态: $(GREEN)运行中$(NC)"; \
 		echo "  PID: $$pid"; \
 		echo "  URL: http://127.0.0.1:8004/mcp"; \
@@ -350,7 +351,7 @@ stop-cls:
 		rm -f mcp_cls.pid; \
 	else \
 		echo "$(YELLOW)⚠️  未找到 mcp_cls.pid 文件$(NC)"; \
-		pkill -f "mcp_servers/cls_server.py" 2>/dev/null && \
+		pkill -f "servers/cls_server.py" 2>/dev/null && \
 			echo "$(GREEN)✅ 已停止所有 CLS MCP 进程$(NC)" || \
 			echo "$(YELLOW)⚠️  没有运行中的 CLS MCP 进程$(NC)"; \
 	fi
@@ -559,11 +560,23 @@ security:  ## 安全检查
 
 test:  ## 运行测试
 	@echo "$(YELLOW)🧪 运行测试...$(NC)"
-	python3 -m pytest tests/ -v --cov=app --cov-report=term-missing --cov-report=html
+	python3 -m pytest tests/ -q
 
 test-quick:  ## 快速测试
 	@echo "$(YELLOW)⚡ 快速测试...$(NC)"
 	python3 -m pytest tests/ -v
+
+eval-validate:  ## 校验评测场景 / 工具注册表 / 文档引用
+	@echo "$(YELLOW)🧭 校验评测场景...$(NC)"
+	python3 scripts/validate_eval.py
+
+eval: eval-validate  ## 跑完整评测（需要 MCP + LLM 凭证）
+	@echo "$(YELLOW)📊 运行评测...$(NC)"
+	python3 scripts/run_eval.py --live
+
+web:  ## 构建前端
+	@echo "$(YELLOW)🎨 构建前端...$(NC)"
+	cd web && npm install && npm run build
 
 check-all:  ## 运行所有检查
 	@echo "$(YELLOW)🚀 运行所有检查...$(NC)"

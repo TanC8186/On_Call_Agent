@@ -39,3 +39,12 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Frontend (built in the web stage)
+web/node_modules/
+web/dist/
+
+# Training artifacts (models are too large for the image)
+training/out/
+training/data/*.jsonl
+eval/results/

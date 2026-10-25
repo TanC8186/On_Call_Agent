@@ -3,26 +3,22 @@ Executor 节点：执行单个步骤
 从计划队列中弹出下一步，由 LLM 决策调用哪个 MCP 工具并执行
 """
 
+import json
 from typing import Dict, Any
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import ToolNode
 from loguru import logger
 
-from app.config import config
+from app.core.llm_factory import create_chat_model
+from app.observability import trace_event
 from app.tools import get_current_time, retrieve_knowledge
-from app.agent.mcp_client import get_mcp_client_with_retry
+from app.agent.mcp_client import get_mcp_tools_cached
 from .state import PlanExecuteState
 
 
-def _create_llm(temperature: float = 0) -> ChatOpenAI:
-    """创建 LLM 实例（OpenAI 兼容模式，支持 DeepSeek 等）"""
-    return ChatOpenAI(
-        model=config.llm_model,
-        api_key=config.llm_api_key,
-        base_url=config.llm_base_url,
-        temperature=temperature,
-    )
+def _create_llm(temperature: float = 0):
+    """统一从工厂取模型，provider 由 .env 决定。"""
+    return create_chat_model(temperature=temperature, streaming=False)
 
 
 async def executor(state: PlanExecuteState) -> Dict[str, Any]:
@@ -40,21 +36,69 @@ async def executor(state: PlanExecuteState) -> Dict[str, Any]:
         logger.info("计划为空，跳过执行")
         return {}
 
-    # 取出第一个步骤
-    task = plan[0]
-    logger.info(f"当前任务: {task}")
+    # 取出第一个步骤（Planner 输出应为 PlanStep dict）
+    step = plan[0]
+    if isinstance(step, dict):
+        task_description = step.get("description") or step.get("tool") or str(step)
+    else:
+        step = {"kind": "reason", "tool": "", "args": {}, "description": str(step)}
+        task_description = str(step["description"])
+    logger.info(f"当前任务: {task_description}")
 
     try:
         # 获取本地工具
         local_tools = [get_current_time, retrieve_knowledge]
 
         # 获取 MCP 工具
-        mcp_client = await get_mcp_client_with_retry()
-        mcp_tools = await mcp_client.get_tools()
+        mcp_tools = await get_mcp_tools_cached()
         logger.info(f"可用工具数量: 本地 {len(local_tools)} + MCP {len(mcp_tools)}")
 
         # 合并所有工具
         all_tools = local_tools + mcp_tools
+
+        # 快路径：Planner 已给出 tool + args，直接执行，不再让 LLM 翻译一次。
+        if step.get("kind") == "tool" and step.get("tool"):
+            tool = next((t for t in all_tools if t.name == step["tool"]), None)
+            args = step.get("args") or {}
+            if tool is None:
+                result = f"工具不存在: {step['tool']}"
+            else:
+                schema = getattr(tool, "args_schema", None)
+                allowed = (
+                    set(schema.get("properties", {})) if isinstance(schema, dict) else set()
+                )
+                if allowed:
+                    filtered = {key: value for key, value in args.items() if key in allowed}
+                    if filtered != args:
+                        logger.warning(
+                            f"丢弃 Planner 编造的参数: {sorted(set(args) - allowed)}"
+                        )
+                    args = filtered
+                try:
+                    tool_result = await tool.ainvoke(args)
+                    result = (
+                        tool_result
+                        if isinstance(tool_result, str)
+                        else json.dumps(tool_result, ensure_ascii=False, default=str)
+                    )
+                except Exception as exc:  # noqa: BLE001 - 工具失败交给 Replanner
+                    result = f"工具执行失败: {exc}"
+            trace_event(
+                state.get("run_id", ""),
+                "tool_step",
+                step=task_description,
+                tools=[{"name": step["tool"], "args": args}],
+                result_chars=len(result),
+                result_preview=result[:2000],
+                input_tokens=None,
+                output_tokens=None,
+            )
+            logger.info(f"步骤执行完成（typed tool），结果长度: {len(result)}")
+            return {
+                "plan": plan[1:],
+                "past_steps": state.get("past_steps", [])
+                + [(task_description, result)],
+            }
 
         # 创建 LLM（绑定工具）
         llm = _create_llm(temperature=0)
@@ -80,11 +124,12 @@ async def executor(state: PlanExecuteState) -> Dict[str, Any]:
 - 工具返回什么就报告什么，数据为空就说"未获取到数据"
 
 专注于当前这一步骤，不要考虑其他步骤。"""),
-            HumanMessage(content=f"请执行以下任务: {task}")
+            HumanMessage(content=f"请执行以下任务: {task_description}")
         ]
 
         # 第一步：LLM 决定是否调用工具
         llm_response = await llm_with_tools.ainvoke(messages)
+        final_response = llm_response
         logger.info(f"LLM 响应类型: {type(llm_response)}")
 
         # 第二步：如果有工具调用，执行工具
@@ -104,17 +149,33 @@ async def executor(state: PlanExecuteState) -> Dict[str, Any]:
             logger.info("LLM 未调用工具，直接返回结果")
             result = llm_response.content if hasattr(llm_response, 'content') else str(llm_response)
 
+        usage = getattr(final_response, "usage_metadata", None) or getattr(
+            llm_response, "usage_metadata", None
+        )
+        trace_event(
+            state.get("run_id", ""),
+            "tool_step",
+            step=task_description,
+            tools=[
+                {"name": call.get("name"), "args": call.get("args")}
+                for call in (getattr(llm_response, "tool_calls", None) or [])
+            ],
+            result_chars=len(result),
+            result_preview=result[:2000],
+            input_tokens=(usage or {}).get("input_tokens"),
+            output_tokens=(usage or {}).get("output_tokens"),
+        )
         logger.info(f"步骤执行完成，结果长度: {len(result)}")
 
-        # 返回更新：移除已执行的步骤，添加执行历史
+        # 返回更新：移除已执行的步骤，追加本次运行的执行历史
         return {
-            "plan": plan[1:],  # 移除第一个步骤
-            "past_steps": [(task, result)],  # 使用 operator.add 追加
+            "plan": plan[1:],
+            "past_steps": state.get("past_steps", []) + [(task_description, result)],
         }
 
     except Exception as e:
         logger.error(f"执行步骤失败: {e}", exc_info=True)
         return {
             "plan": plan[1:],
-            "past_steps": [(task, f"执行失败: {str(e)}")],
+            "past_steps": state.get("past_steps", []) + [(task_description, f"执行失败: {str(e)}")],
         }

@@ -28,9 +28,10 @@ class DocumentSplitterService:
             strip_headers=False,  # 保留标题在内容中
         )
 
-        # 递归字符分割器 (用于二次分割，使用更大的chunk_size)
+        # 递归字符分割器：chunk_size 必须与 embedding 模型的上下文窗口匹配。
+        # 旧实现把它翻倍到 1600 字符，导致 128-token 模型只能看到每个分片的一半。
         self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=self.chunk_size * 2,  # 加倍chunk_size，减少分片数
+            chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap,
             length_function=len,
             is_separator_regex=False,
@@ -38,7 +39,6 @@ class DocumentSplitterService:
 
         logger.info(
             f"文档分割服务初始化完成, chunk_size={self.chunk_size}, "
-            f"secondary_chunk_size={self.chunk_size * 2}, "
             f"overlap={self.chunk_overlap}"
         )
 
@@ -64,8 +64,8 @@ class DocumentSplitterService:
             # 第二阶段: 按大小进一步分割
             docs_after_split = self.text_splitter.split_documents(md_docs)
 
-            # 第三阶段: 合并太小的分片 (< 300字符)
-            final_docs = self._merge_small_chunks(docs_after_split, min_size=300)
+            # 第三阶段: 合并太小的分片（合并后仍不得超过 chunk_size）
+            final_docs = self._merge_small_chunks(docs_after_split, min_size=80)
 
             # 添加文件路径元数据
             for doc in final_docs:
@@ -156,10 +156,14 @@ class DocumentSplitterService:
             if current_doc is None:
                 # 第一个文档
                 current_doc = doc
-            elif doc_size < min_size and len(current_doc.page_content) < self.chunk_size * 2:
-                # 当前文档太小且合并后不会太大，则合并
+            elif (
+                doc_size < min_size
+                and len(current_doc.page_content) + len(doc.page_content) + 2 <= self.chunk_size
+                and doc.metadata.get("h1") == current_doc.metadata.get("h1")
+                and doc.metadata.get("h2") == current_doc.metadata.get("h2")
+            ):
+                # 只有同一章节内的小分片才能合并，避免元数据指向错误章节
                 current_doc.page_content += "\n\n" + doc.page_content
-                # 保留主文档的元数据
             else:
                 # 保存当前文档，开始新文档
                 merged_docs.append(current_doc)

@@ -1,0 +1,19 @@
+id: service-down-001
+title: 服务不可用 / 5xx 激增
+symptom: agent-test-server 上的 Web 服务返回 502，健康检查连续失败
+service: agent-test-server
+expect_no_incident: false
+gold_tools:
+  - list_all_services
+  - get_service_info
+  - search_log
+  - get_process_list
+gold_facts:
+  - metric: http_5xx_rate
+    op: ">"
+    value: 0
+forbidden_claims:
+  - CPU 使用率 100%
+  - 磁盘已满
+max_steps: 8
+notes: 合成场景，用于验证工具调用与数值引用；不是真实生产事故。

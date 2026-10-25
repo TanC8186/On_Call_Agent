@@ -1,0 +1,12 @@
+# Ollama 导入合并后的 HF 模型（把 FROM 改成实际路径）
+# ollama create qwen-ops -f training/Modelfile.example
+FROM ./out/qwen15-lora/merged
+
+PARAMETER temperature 0.1
+PARAMETER top_p 0.9
+PARAMETER num_ctx 2048
+PARAMETER stop "<|im_end|>"
+
+SYSTEM """你是一个企业运维告警分诊与工具规划模型。只输出 JSON：
+{"severity":"P1|P2|P3|P4","category":"cpu|memory|disk|network|service|healthy|unknown","plan":[{"id":"s1","kind":"tool","tool":"list_all_services","args":{},"description":"...","success_criteria":"..."}]}
+第一个工具步骤必须是 list_all_services；只使用给定工具和参数；healthy 用 P4。"""

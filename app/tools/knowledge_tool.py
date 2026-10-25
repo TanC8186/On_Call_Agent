@@ -35,17 +35,19 @@ def retrieve_knowledge(query: str) -> Tuple[str, List[Document]]:
         
         if not docs:
             logger.warning("未检索到相关文档")
-            return "没有找到相关信息。", []
-        
+            # 返回空上下文，调用方用空串判断是否命中；不要返回"没有找到"这类
+            # 非空字符串，否则会被上层当成有效经验文档。
+            return "", []
+
         # 格式化文档为上下文
         context = format_docs(docs)
-        
+
         logger.info(f"检索到 {len(docs)} 个相关文档")
         return context, docs
-        
+
     except Exception as e:
         logger.error(f"知识检索工具调用失败: {e}")
-        return f"检索知识时发生错误: {str(e)}", []
+        return "", []
 
 
 def format_docs(docs: List[Document]) -> str:

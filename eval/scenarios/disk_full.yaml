@@ -1,0 +1,19 @@
+id: disk-full-001
+title: 磁盘使用率超过阈值
+symptom: agent-test-server 的根分区磁盘使用率超过 90%，日志写入失败
+service: agent-test-server
+expect_no_incident: false
+gold_tools:
+  - list_all_services
+  - query_disk_metrics
+  - check_disk_usage
+  - search_log
+gold_facts:
+  - metric: disk_usage_percent
+    op: ">"
+    value: 90
+forbidden_claims:
+  - 内存泄漏
+  - 网络带宽耗尽
+max_steps: 8
+notes: 合成场景，用于验证工具调用与数值引用；不是真实生产事故。

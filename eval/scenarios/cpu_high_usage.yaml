@@ -1,0 +1,19 @@
+id: cpu-high-001
+title: CPU 使用率持续过高
+symptom: agent-test-server 的 CPU 使用率持续 10 分钟超过 90%，接口响应变慢
+service: agent-test-server
+expect_no_incident: false
+gold_tools:
+  - list_all_services
+  - query_cpu_metrics
+  - query_process_list
+  - search_log
+gold_facts:
+  - metric: cpu_usage_percent
+    op: ">"
+    value: 90
+forbidden_claims:
+  - 磁盘已满
+  - 内存泄漏
+max_steps: 8
+notes: 合成场景，用于验证工具调用与数值引用；不是真实生产事故。

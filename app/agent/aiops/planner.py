@@ -3,17 +3,20 @@ Planner 节点：制定执行计划
 结合 RAG 知识库检索历史经验，基于可用 MCP 工具生成分步执行计划
 """
 
+import difflib
 import json
 import re
 from textwrap import dedent
 from typing import Dict, Any, List
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
 from loguru import logger
 
-from app.config import config
+from app.core.llm_factory import create_chat_model
+from app.observability import trace_event
 from app.tools import get_current_time, retrieve_knowledge
-from app.agent.mcp_client import get_mcp_client_with_retry
+from app.agent.mcp_client import get_mcp_tools_cached
+from .local_planner import try_local_plan
+from .plan_schema import normalize_plan
 from .state import PlanExecuteState
 from .utils import format_tools_description
 
@@ -31,26 +34,25 @@ PLANNER_SYSTEM_TEMPLATE = dedent("""
 
     对于给定的运维诊断任务，请创建一个逐步的执行计划。计划规则：
     - **每个步骤只调用一个工具**，不要把多个工具合并到一步
-    - **每个工具调用步骤必须明确写出工具名和参数值**（如 service_name='deep-learning-server'）
-    - **必须覆盖所有监控指标**：CPU、内存、磁盘、网络、日志，每个指标独立一个步骤
-    - **至少 5 个步骤**（包括服务发现、各指标查询、日志查询、综合报告）
-    - 步骤之间应该有清晰的依赖关系（先 list_all_services 发现服务，再逐个查询指标）
+    - **工具名和参数名必须来自上面列出的真实 schema**；不确定服务名时先调用 list_all_services
+    - 步骤数量由任务决定，不要为了凑步数重复调用已有结果的工具
+    - 先发现服务，再按需查询指标和日志；只查询与当前症状相关的指标
     - 步骤描述要具体、可操作
     - **如果有相关经验文档，请参考其中的方法和步骤制定计划**
 
     你必须以严格的 JSON 格式输出，格式如下：
-    {"steps": ["步骤1描述", "步骤2描述", "步骤3描述"]}
-
-    示例输出：
     {"steps": [
-        "调用 list_all_services 列出所有服务及其实例映射",
-        "使用 query_cpu_metrics 查询 deep-learning-server 的 CPU 使用率，参数 service_name='deep-learning-server'",
-        "使用 query_memory_metrics 查询 deep-learning-server 的内存使用率，参数 service_name='deep-learning-server'",
-        "使用 query_disk_metrics 查询 deep-learning-server 的磁盘使用率，参数 service_name='deep-learning-server'",
-        "综合以上信息生成诊断报告"
+        {"id": "s1", "kind": "tool", "tool": "list_all_services", "args": {}, "description": "列出服务与实例映射", "success_criteria": "拿到至少一个服务名"},
+        {"id": "s2", "kind": "reason", "tool": "", "args": {}, "description": "综合信息生成诊断报告", "success_criteria": "报告引用已获取的指标"}
     ]}
 
-    注意：只输出 JSON，不要包含其他解释文字。每个步骤最多涉及一个工具。
+    规则：
+    - kind="tool" 的步骤必须填写真实 tool 名和 args（参数名来自上面的 schema）
+    - kind="reason" 的步骤不需要工具，tool 留空
+    - 不确定服务名时，先安排一个 list_all_services 的 tool 步骤
+    - 不要输出工具 schema 之外的参数名
+
+    注意：只输出 JSON，不要包含其他解释文字。
 """).strip()
 
 
@@ -91,14 +93,51 @@ def _parse_json_from_text(text: str) -> Dict[str, Any]:
     return {"steps": steps} if steps else {"steps": ["收集相关信息", "分析数据", "生成报告"]}
 
 
-def _create_llm(temperature: float = 0) -> ChatOpenAI:
-    """创建 LLM 实例（OpenAI 兼容模式，支持 DeepSeek 等）"""
-    return ChatOpenAI(
-        model=config.llm_model,
-        api_key=config.llm_api_key,
-        base_url=config.llm_base_url,
-        temperature=temperature,
-    )
+def _guess_service(text: str) -> str:
+    try:
+        import json
+        from pathlib import Path
+
+        services = json.loads(
+            (Path(__file__).resolve().parents[3] / "services.json").read_text(
+                encoding="utf-8"
+            )
+        ).get("services", [])
+        for item in services:
+            name = item.get("service_name", "")
+            if name and name in text:
+                return name
+    except Exception:  # noqa: BLE001
+        pass
+    return "unknown"
+
+
+def _validate_plan_tools(plan_steps: list[dict], valid_tools: set[str]) -> list[dict]:
+    """把 Planner 编造的工具名映射到最接近的真实工具；映射不了就降级为 reason。"""
+    repaired = []
+    for step in plan_steps:
+        tool = step.get("tool") or ""
+        if step.get("kind") == "tool" and tool and tool not in valid_tools:
+            match = difflib.get_close_matches(tool, sorted(valid_tools), n=1, cutoff=0.55)
+            if match:
+                logger.warning(f"Planner 工具名不存在: {tool} -> 修正为 {match[0]}")
+                step = {**step, "tool": match[0]}
+            else:
+                logger.warning(f"Planner 工具名不存在且无法匹配: {tool}，降级为 reason")
+                step = {
+                    **step,
+                    "kind": "reason",
+                    "tool": "",
+                    "args": {},
+                    "description": f"[未知工具 {tool}] {step.get('description', '')}",
+                }
+        repaired.append(step)
+    return repaired
+
+
+def _create_llm(temperature: float = 0):
+    """统一从工厂取模型，provider 由 .env 决定。"""
+    return create_chat_model(temperature=temperature, streaming=False)
 
 
 async def planner(state: PlanExecuteState) -> Dict[str, Any]:
@@ -132,8 +171,7 @@ async def planner(state: PlanExecuteState) -> Dict[str, Any]:
         local_tools = [get_current_time, retrieve_knowledge]
 
         # 获取 MCP 工具
-        mcp_client = await get_mcp_client_with_retry()
-        mcp_tools = await mcp_client.get_tools()
+        mcp_tools = await get_mcp_tools_cached()
 
         # 合并所有工具
         all_tools = local_tools + mcp_tools
@@ -141,6 +179,21 @@ async def planner(state: PlanExecuteState) -> Dict[str, Any]:
 
         # 格式化工具描述
         tools_description = format_tools_description(all_tools)
+
+        # 本地小模型快路径：只接受通过工具/参数校验的计划
+        local_result = await try_local_plan(
+            input_text,
+            _guess_service(input_text),
+            all_tools,
+            state.get("run_id", ""),
+        )
+        if local_result:
+            logger.info("采用本地小模型计划，跳过云端 Planner")
+            return {
+                "plan": local_result["plan"],
+                "severity": local_result.get("severity") or "",
+                "category": local_result.get("category") or "",
+            }
 
         # 步骤3: 格式化经验文档上下文
         if experience_docs:
@@ -159,16 +212,15 @@ async def planner(state: PlanExecuteState) -> Dict[str, Any]:
         # 步骤4: 创建 LLM 并生成计划（不使用 with_structured_output，DeepSeek 不支持）
         llm = _create_llm(temperature=0)
 
-        # 缩短用户输入，避免超长 prompt
-        short_input = input_text[:500] + "..." if len(input_text) > 500 else input_text
-
         system_msg = (PLANNER_SYSTEM_TEMPLATE
             .replace("{tools_description}", tools_description)
             .replace("{experience_context}", experience_context))
 
+        # 不要把任务描述截断：报告模板和"严禁编造"等约束都在后半段，
+        # 截断会让模型看不到输出契约。
         response = await llm.ainvoke([
             ("system", system_msg),
-            ("user", f"请为以下任务制定执行计划：\n\n{short_input}"),
+            ("user", f"请为以下任务制定执行计划：\n\n{input_text}"),
         ])
 
         # 解析 JSON 输出
@@ -176,16 +228,27 @@ async def planner(state: PlanExecuteState) -> Dict[str, Any]:
         logger.info(f"Planner LLM 响应长度: {len(response_text)}")
 
         parsed = _parse_json_from_text(response_text)
-        plan_steps = parsed.get("steps", [])
+        plan_steps = normalize_plan(parsed.get("steps", []))
 
         if not plan_steps:
             logger.warning("计划为空，使用默认计划")
-            plan_steps = ["收集相关信息", "分析数据", "生成报告"]
+            plan_steps = normalize_plan(["收集相关信息", "分析数据", "生成报告"])
+
+        plan_steps = _validate_plan_tools(plan_steps, {t.name for t in all_tools if hasattr(t, "name")})
 
         logger.info(f"计划已生成，共 {len(plan_steps)} 个步骤")
         for i, step in enumerate(plan_steps, 1):
             logger.info(f"  步骤{i}: {step}")
 
+        usage = getattr(response, "usage_metadata", None) or {}
+        trace_event(
+            state.get("run_id", ""),
+            "plan",
+            steps=plan_steps,
+            rag_hit=bool(experience_docs),
+            input_tokens=usage.get("input_tokens"),
+            output_tokens=usage.get("output_tokens"),
+        )
         return {"plan": plan_steps}
 
     except Exception as e:

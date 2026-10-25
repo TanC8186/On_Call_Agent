@@ -42,12 +42,16 @@ SECRET_ID = os.getenv("TENCENTCLOUD_SECRET_ID", "")
 SECRET_KEY = os.getenv("TENCENTCLOUD_SECRET_KEY", "")
 DEFAULT_REGION = os.getenv("TENCENTCLOUD_REGION", "ap-beijing")
 USE_REAL_API = bool(SECRET_ID and SECRET_KEY)
+# 合成数据只在显式开启时使用，且必须带 source=demo 标记；默认 fail-fast。
+DEMO_MODE = os.getenv("DEMO_MODE", "0").lower() in ("1", "true", "yes")
 
 if USE_REAL_API:
     _cred = credential.Credential(SECRET_ID, SECRET_KEY)
     logger.info(f"✅ Monitor Server: 已加载真实腾讯云凭证，默认区域={DEFAULT_REGION}")
+elif DEMO_MODE:
+    logger.warning("⚠️  Monitor Server: 未配置腾讯云凭证，DEMO_MODE=1，将返回合成演示数据（source=demo）")
 else:
-    logger.warning("⚠️  Monitor Server: 未配置腾讯云凭证，将返回本地估算数据")
+    logger.error("❌ Monitor Server: 未配置腾讯云凭证且 DEMO_MODE=0，监控指标工具将返回 unavailable")
 
 mcp = FastMCP("Monitor")
 
@@ -81,11 +85,24 @@ def _resolve_instance(service_name: str, instance_id: str = None) -> tuple:
     return (instance_id or service_name), None
 
 
+SERVICES_FILE = Path(__file__).resolve().parent.parent / "services.json"
+
+
 def _get_service_list() -> list:
-    """获取服务列表（供内部使用，与 list_all_services 共享数据源）"""
-    return [
-        {"service_name": "agent-test-server", "instance_id": "lhins-nst2h9mv", "region": "ap-guangzhou", "status": "active", "type": "lighthouse"},
-    ]
+    """从 services.json 读取服务清单；缺失时返回空列表而不是伪造条目。"""
+    try:
+        with open(SERVICES_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+        services = data.get("services", [])
+        if not isinstance(services, list):
+            raise ValueError("services 字段必须是数组")
+        return services
+    except FileNotFoundError:
+        logger.warning(f"服务清单不存在: {SERVICES_FILE}")
+        return []
+    except (json.JSONDecodeError, ValueError) as e:
+        logger.error(f"服务清单格式错误: {e}")
+        return []
 
 
 def log_tool_call(func):
@@ -148,9 +165,25 @@ def _calc_statistics(values: List[float]) -> Dict[str, Any]:
     }
 
 
-# ── 本地估算数据生成（真实 API 不可用时的回退） ─────────────────────
+# ── 工具结果契约：合成数据只能显式开启，默认 fail-fast ─────────────
 
-def _local_estimate_metric_data(
+def _tool_unavailable(service_name: str, metric_name: str, reason: str) -> Dict[str, Any]:
+    """没有真实数据时的统一返回：ok=false，绝不伪造数值。"""
+    return {
+        "ok": False,
+        "source": "unavailable",
+        "service_name": service_name,
+        "metric_name": metric_name,
+        "data_points": [],
+        "statistics": {"avg": 0, "max": 0, "min": 0, "p95": 0, "count": 0},
+        "alert_info": {"triggered": False, "threshold": None, "message": reason},
+        "error": reason,
+    }
+
+
+# ── 合成演示数据（仅 DEMO_MODE=1 使用） ──────────────────────────
+
+def _demo_metric_data(
     service_name: str,
     metric_name: str,
     start_dt: datetime,
@@ -199,7 +232,8 @@ def _local_estimate_metric_data(
             "threshold": threshold,
             "message": f"{metric_name} 超过 {threshold}% 阈值" if alert_triggered else f"{metric_name} 正常"
         },
-        "source": "local_estimate",
+        "source": "demo",
+        "demo_mode": True,
     }
 
 
@@ -312,7 +346,13 @@ def query_cpu_metrics(
         interval_minutes = int(interval[:-1]) * 60
 
     if not USE_REAL_API:
-        return _local_estimate_metric_data(service_name, "cpu_usage_percent", start_dt, end_dt, interval_minutes, 10.0, 96.0)
+        if DEMO_MODE:
+            return _demo_metric_data(service_name, "cpu_usage_percent", start_dt, end_dt, interval_minutes, 10.0, 96.0)
+        return _tool_unavailable(
+            service_name,
+            "cpu_usage_percent",
+            "未配置腾讯云凭证且未开启 DEMO_MODE，无法获取真实 CPU 指标",
+        )
 
     # ── 真实 API ──
     # 优先使用 CVM 实例 ID 查询；否则用自定义指标命名空间
@@ -395,6 +435,8 @@ def query_cpu_metrics(
                 "service_name": service_name,
                 "metric_name": "cpu_usage_percent",
                 "interval": interval,
+                "ok": False,
+                "source": "unavailable",
                 "data_points": [],
                 "statistics": {},
                 "error": f"腾讯云 API 查询失败: {e2.message}",
@@ -438,7 +480,13 @@ def query_memory_metrics(
         interval_minutes = int(interval[:-1]) * 60
 
     if not USE_REAL_API:
-        return _local_estimate_metric_data(service_name, "memory_usage_percent", start_dt, end_dt, interval_minutes, 30.0, 85.0)
+        if DEMO_MODE:
+            return _demo_metric_data(service_name, "memory_usage_percent", start_dt, end_dt, interval_minutes, 30.0, 85.0)
+        return _tool_unavailable(
+            service_name,
+            "memory_usage_percent",
+            "未配置腾讯云凭证且未开启 DEMO_MODE，无法获取真实内存指标",
+        )
 
     # ── 真实 API ──
     inst_id, resolved_region = _resolve_instance(service_name, instance_id)
@@ -488,6 +536,8 @@ def query_memory_metrics(
             "service_name": service_name,
             "metric_name": "memory_usage_percent",
             "interval": interval,
+            "ok": False,
+            "source": "unavailable",
             "data_points": [],
             "statistics": {},
             "error": f"腾讯云 API 查询失败: {e.message}",
@@ -529,7 +579,13 @@ def query_disk_metrics(
         interval_minutes = int(interval[:-1]) * 60
 
     if not USE_REAL_API:
-        return _local_estimate_metric_data(service_name, "disk_usage_percent", start_dt, end_dt, interval_minutes, 40.0, 92.0)
+        if DEMO_MODE:
+            return _demo_metric_data(service_name, "disk_usage_percent", start_dt, end_dt, interval_minutes, 40.0, 92.0)
+        return _tool_unavailable(
+            service_name,
+            "disk_usage_percent",
+            "未配置腾讯云凭证且未开启 DEMO_MODE，无法获取真实磁盘指标",
+        )
 
     inst_id, resolved_region = _resolve_instance(service_name, instance_id)
     region = resolved_region or region
@@ -620,7 +676,13 @@ def query_network_metrics(
         interval_minutes = int(interval[:-1]) * 60
 
     if not USE_REAL_API:
-        # 网络流量本地估算
+        if not DEMO_MODE:
+            return _tool_unavailable(
+                service_name,
+                "network_traffic_mbps",
+                "未配置腾讯云凭证且未开启 DEMO_MODE，无法获取真实网络指标",
+            )
+        # 网络流量合成演示数据
         data_points = []
         current_time = start_dt
         ti = 0
@@ -639,7 +701,8 @@ def query_network_metrics(
             "metric_name": "network_traffic_mbps",
             "interval": interval,
             "data_points": data_points,
-            "source": "local_estimate",
+            "source": "demo",
+            "demo_mode": True,
         }
 
     inst_id, resolved_region = _resolve_instance(service_name, instance_id)
@@ -764,8 +827,8 @@ def search_historical_tickets(
 ) -> Dict[str, Any]:
     """搜索历史工单。
 
-    注意：腾讯云无统一工单 API。此工具返回本地估算数据作为示例。
-    实际使用时建议对接自有工单系统（如 Jira、禅道、企业微信审批）。
+    注意：腾讯云无统一工单 API，本仓库也未接入真实工单系统。
+    DEMO_MODE=1 时返回演示工单；否则返回 unavailable，绝不伪造工单号。
 
     Args:
         service_name: 服务名称（可选）
@@ -777,7 +840,16 @@ def search_historical_tickets(
     Returns:
         Dict: 工单列表
     """
-    local_estimate_tickets = [
+    if not DEMO_MODE:
+        return {
+            "ok": False,
+            "source": "unavailable",
+            "total": 0,
+            "tickets": [],
+            "message": "未接入真实工单系统；如需演示请设置 DEMO_MODE=1",
+        }
+
+    demo_tickets = [
         {
             "ticket_id": "TK-20260214-001",
             "service_name": "data-sync-service",
@@ -823,7 +895,7 @@ def search_historical_tickets(
     ]
 
     # 筛选
-    filtered = local_estimate_tickets
+    filtered = demo_tickets
     if service_name:
         filtered = [t for t in filtered if service_name.lower() in t["service_name"].lower()]
     if issue_type:
@@ -831,6 +903,9 @@ def search_historical_tickets(
     filtered = filtered[:limit]
 
     return {
+        "ok": True,
+        "source": "demo",
+        "demo_mode": True,
         "total": len(filtered),
         "tickets": filtered,
         "query": {
@@ -838,10 +913,7 @@ def search_historical_tickets(
             "issue_type": issue_type,
             "limit": limit,
         },
-        "message": (
-            f"找到 {len(filtered)} 条工单（本地估算数据）。"
-            "生产环境请对接自有工单系统 API。"
-        ),
+        "message": f"找到 {len(filtered)} 条演示工单（非真实工单系统数据）",
     }
 
 
@@ -883,10 +955,22 @@ def get_service_info(
                 "source": mem_data.get("source", "unknown"),
             },
         },
-        "health": "healthy" if not (
-            cpu_data.get("alert_info", {}).get("triggered", False) or
-            mem_data.get("alert_info", {}).get("triggered", False)
-        ) else "warning",
+        "ok": cpu_data.get("ok", True) and mem_data.get("ok", True),
+        "source": (
+            "unavailable"
+            if cpu_data.get("ok") is False or mem_data.get("ok") is False
+            else "tencent_cloud"
+        ),
+        "health": (
+            "unavailable"
+            if cpu_data.get("ok") is False or mem_data.get("ok") is False
+            else (
+                "warning"
+                if cpu_data.get("alert_info", {}).get("triggered", False)
+                or mem_data.get("alert_info", {}).get("triggered", False)
+                else "healthy"
+            )
+        ),
         "query_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
 

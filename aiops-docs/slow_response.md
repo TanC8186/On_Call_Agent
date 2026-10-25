@@ -19,7 +19,7 @@
 **目的**: 确定告警发生的准确时间
 
 ### 步骤2: 查询应用性能日志
-**工具**: `query_logs`
+**工具**: `search_log`
 **参数要求**:
 - **地域**: `ap-guangzhou`
 - **日志主题**: `application-logs`
@@ -35,7 +35,7 @@
 ```
 
 ### 步骤3: 查询数据库慢查询日志
-**工具**: `query_logs`
+**工具**: `search_log`
 **参数要求**:
 - **地域**: `ap-guangzhou`
 - **日志主题**: `database-slow-query`
@@ -43,7 +43,7 @@
 - **查询条件**: `query_time:>1000`
 
 ### 步骤4: 查询系统资源使用情况
-**工具**: `query_logs`
+**工具**: `search_log`
 **参数要求**:
 - **地域**: `ap-guangzhou`
 - **日志主题**: `system-metrics`

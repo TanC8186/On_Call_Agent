@@ -1,0 +1,12 @@
+{
+  "total": 60,
+  "by_family": {
+    "cpu": 60
+  },
+  "by_severity": {
+    "P2": 60
+  },
+  "by_category": {
+    "cpu": 60
+  }
+}

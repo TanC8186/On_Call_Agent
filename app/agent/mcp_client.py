@@ -181,3 +181,18 @@ def _create_mcp_client(
     
     # 第一个参数是 servers 配置，直接传递
     return MultiServerMCPClient(servers, **kwargs)  # type: ignore[arg-type]
+
+
+# 进程级工具缓存：Planner/Executor/Replanner 每个节点都 list 一次工具，
+# 一次诊断会重复 3-8 次网络调用。工具清单在进程生命周期内视为稳定。
+_tools_cache: Optional[List] = None
+
+
+async def get_mcp_tools_cached(force_refresh: bool = False) -> List:
+    """获取 MCP 工具列表，按进程缓存。"""
+    global _tools_cache
+    if _tools_cache is None or force_refresh:
+        client = await get_mcp_client_with_retry()
+        _tools_cache = await client.get_tools()
+        logger.info(f"MCP 工具列表已缓存: {len(_tools_cache)} 个")
+    return _tools_cache

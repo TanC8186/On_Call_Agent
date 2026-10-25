@@ -1,0 +1,72 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "severity",
+    "category",
+    "plan"
+  ],
+  "properties": {
+    "severity": {
+      "type": "string",
+      "enum": [
+        "P1",
+        "P2",
+        "P3",
+        "P4"
+      ]
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "cpu",
+        "memory",
+        "disk",
+        "network",
+        "service",
+        "healthy",
+        "unknown"
+      ]
+    },
+    "plan": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "tool",
+          "args",
+          "description"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "tool",
+              "reason"
+            ]
+          },
+          "tool": {
+            "type": "string"
+          },
+          "args": {
+            "type": "object"
+          },
+          "description": {
+            "type": "string"
+          },
+          "success_criteria": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

@@ -3,7 +3,7 @@
 主应用程序，配置路由、中间件、静态文件等
 """
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -11,8 +11,9 @@ from contextlib import asynccontextmanager
 import os
 
 from app.config import config
+from app.core.auth import require_api_key
 from loguru import logger
-from app.api import chat, health, file, aiops
+from app.api import aiops, chat, file, health, runs
 from app.core.milvus_client import milvus_manager
 
 
@@ -59,37 +60,56 @@ app = FastAPI(
 # 配置 CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=[
+        origin.strip()
+        for origin in os.getenv(
+            "CORS_ORIGINS", "http://localhost:9900,http://127.0.0.1:9900"
+        ).split(",")
+        if origin.strip()
+    ],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # 注册路由
 app.include_router(health.router, tags=["健康检查"])
-app.include_router(chat.router, prefix="/api", tags=["对话"])
-app.include_router(file.router, prefix="/api", tags=["文件管理"])
-app.include_router(aiops.router, prefix="/api", tags=["AIOps智能运维"])
+app.include_router(
+    chat.router, prefix="/api", tags=["对话"], dependencies=[Depends(require_api_key)]
+)
+app.include_router(
+    file.router, prefix="/api", tags=["文件管理"], dependencies=[Depends(require_api_key)]
+)
+app.include_router(
+    aiops.router, prefix="/api", tags=["AIOps智能运维"], dependencies=[Depends(require_api_key)]
+)
+app.include_router(
+    runs.router, prefix="/api", tags=["运行追踪"], dependencies=[Depends(require_api_key)]
+)
 
 from pathlib import Path
 
 # 项目根目录（main.py 在 app/ 下，根目录在上层）
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-# 静态文件目录
-static_dir = str(_PROJECT_ROOT / "static")
-app.mount("/static", StaticFiles(directory=static_dir), name="static")
+# 前端构建产物：web/dist（cd web && npm run build）
+_web_dist = _PROJECT_ROOT / "web" / "dist"
+if (_web_dist / "assets").exists():
+    app.mount(
+        "/assets", StaticFiles(directory=str(_web_dist / "assets")), name="assets"
+    )
+
 
 @app.get("/")
 async def root():
-    """返回首页"""
-    index_path = os.path.join(static_dir, "index.html")
-    if os.path.exists(index_path):
+    """返回前端首页（Vite 构建产物或旧版静态页）。"""
+    index_path = _web_dist / "index.html"
+    if index_path.exists():
         return FileResponse(index_path)
     return {
         "message": f"Welcome to {config.app_name} API",
         "version": config.app_version,
-        "docs": "/docs"
+        "docs": "/docs",
     }
 
 

@@ -22,6 +22,7 @@ wheels/
 
 # Virtual Environment
 venv/
+.venv-train/
 env/
 ENV/
 .venv
@@ -72,6 +73,12 @@ volumes/
 uploads/
 *.tmp
 
+# Eval artifacts (baselines are committed explicitly when frozen)
+eval/results/
+
+# Training artifacts
+training/out/
+
 # OS
 .DS_Store
 Thumbs.db
@@ -89,3 +96,13 @@ dmypy.json
 # Ruff
 .ruff_cache/
 
+# Frontend
+web/node_modules/
+web/dist/
+
+# Local docs / scratch
+.aiops-docs-local/
+
+
+# Scratch
+.ui-check.png

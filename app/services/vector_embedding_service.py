@@ -18,14 +18,6 @@ from loguru import logger
 from app.config import config
 
 
-class _ZeroVectorEmbeddings(Embeddings):
-    """零向量 Embedding（占位，所有 provider 不可用时的最后回退）"""
-    def embed_documents(self, texts: List[str]) -> List[List[float]]:
-        return [[0.0] * 384 for _ in texts]
-    def embed_query(self, text: str) -> List[float]:
-        return [0.0] * 384
-
-
 def _create_openai_embeddings(
     api_key: str,
     base_url: str,
@@ -126,11 +118,13 @@ def create_embedding_service() -> Embeddings:
             dimensions=1024,
         )
     except Exception as e:
-        logger.warning(f"DashScope Embedding 初始化失败: {e}，使用零向量 stub")
+        logger.error(f"DashScope Embedding 初始化失败: {e}")
 
-    # 最终回退：零向量 stub（避免应用崩溃，但 RAG 功能不可用）
-    logger.warning("⚠️  所有 Embedding provider 均不可用，RAG 知识库功能将返回空结果")
-    return _ZeroVectorEmbeddings()
+    # 不再回退到零向量：零向量会让所有查询等距，RAG 会静默返回任意文档。
+    raise RuntimeError(
+        "没有可用的 Embedding provider：请检查 EMBEDDING_PROVIDER / "
+        "EMBEDDING_MODEL / EMBEDDING_API_KEY，或安装 sentence-transformers 模型"
+    )
 
 
 # 懒加载全局单例（避免 import 时因模型缺失导致整个应用崩溃）
